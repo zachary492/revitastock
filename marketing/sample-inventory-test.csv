@@ -1,0 +1,7 @@
+sku,quantity,title,location
+KAW-CARB-001,0,Kawasaki carburetor,Bin 4
+LEV-JKT-VTG,1,Vintage trucker jacket,Rack B
+HON-ALT-98,1,1998 Civic alternator,Shelf 2
+CER-BOWL-SET,0,Ceramic bowl set,Bin 9
+,3,Missing SKU test row,Shelf 5
+BAD-QTY-001,abc,Bad quantity test row,Shelf 6

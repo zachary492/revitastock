@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RevitaStock — Keep your shelf and your eBay listings in sync</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#14181B; --panel:#1B2025; --panel-2:#20262C; --border:#2A3138;
+    --text:#EDEEF0; --text-muted:#8D97A3;
+    --ghost:#E6533C; --ghost-dim:#3A2420;
+    --phantom:#E8A33D; --phantom-dim:#3A2E14;
+    --sync:#3FAE85; --sync-dim:#153228;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{
+    background:var(--bg); color:var(--text);
+    font-family:'Inter',sans-serif; line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+  @media (prefers-reduced-motion: reduce){ *{animation:none !important; transition:none !important;} }
+
+  .wrap{max-width:1120px; margin:0 auto; padding:0 32px;}
+  a{color:inherit;}
+
+  /* ---- nav ---- */
+  header{border-bottom:1px solid var(--border); position:sticky; top:0; background:rgba(20,24,27,0.92); backdrop-filter:blur(6px); z-index:10;}
+  nav.wrap{display:flex; align-items:center; justify-content:space-between; height:72px;}
+  .word{font-family:'Oswald',sans-serif; font-weight:700; font-size:22px; letter-spacing:0.02em; text-transform:uppercase;}
+  .word span{color:var(--phantom);}
+  .tagline{font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--text-muted); letter-spacing:0.06em; margin-left:12px; display:none;}
+  @media(min-width:640px){ .tagline{display:inline;} }
+  .nav-cta{
+    font-family:'JetBrains Mono',monospace; font-size:13px; font-weight:500;
+    border:1px solid var(--phantom); color:var(--phantom); background:transparent;
+    padding:10px 18px; border-radius:2px; text-decoration:none; cursor:pointer;
+    transition:background .15s, color .15s;
+  }
+  .nav-cta:hover{background:var(--phantom); color:#1A1103;}
+
+  /* ---- hero ---- */
+  .hero{padding:88px 0 96px;}
+  .hero-grid{display:grid; grid-template-columns:1fr; gap:56px; align-items:center;}
+  @media(min-width:960px){ .hero-grid{grid-template-columns:1.05fr 0.95fr;} }
+  .eyebrow{
+    font-family:'JetBrains Mono',monospace; font-size:12px; letter-spacing:0.12em;
+    color:var(--phantom); text-transform:uppercase; margin-bottom:20px; display:inline-block;
+    border-bottom:1px solid var(--phantom-dim); padding-bottom:6px;
+  }
+  h1{
+    font-family:'Oswald',sans-serif; font-weight:700; font-size:clamp(34px,5vw,54px);
+    line-height:1.08; letter-spacing:-0.01em; margin-bottom:22px;
+  }
+  .sub{font-size:17px; color:var(--text-muted); max-width:52ch; margin-bottom:32px;}
+
+  form.waitlist{display:flex; gap:10px; flex-wrap:wrap; max-width:440px;}
+  form.waitlist input[type=email]{
+    flex:1; min-width:200px; background:var(--panel); border:1px solid var(--border); color:var(--text);
+    font-family:'Inter',sans-serif; font-size:15px; padding:13px 16px; border-radius:2px; outline:none;
+  }
+  form.waitlist input[type=email]:focus{border-color:var(--phantom);}
+  form.waitlist input[type=email]::placeholder{color:var(--text-muted);}
+  .btn-primary{
+    font-family:'JetBrains Mono',monospace; font-weight:600; font-size:13px; letter-spacing:0.03em;
+    background:var(--phantom); color:#1A1103; border:none; padding:13px 22px; border-radius:2px;
+    cursor:pointer; text-transform:uppercase; transition:filter .15s;
+  }
+  .btn-primary:hover{filter:brightness(1.08);}
+  .form-note{font-family:'JetBrains Mono',monospace; font-size:11.5px; color:var(--text-muted); margin-top:12px;}
+  .form-success{display:none; font-family:'JetBrains Mono',monospace; font-size:14px; color:var(--sync); margin-top:14px;}
+  .form-success.show{display:block;}
+
+  /* ---- ledger widget ---- */
+  .ledger{background:var(--panel); border:1px solid var(--border); border-radius:6px; overflow:hidden;}
+  .ledger-head{
+    display:flex; justify-content:space-between; align-items:center;
+    padding:14px 18px; border-bottom:1px solid var(--border); background:var(--panel-2);
+  }
+  .ledger-head .title{font-family:'JetBrains Mono',monospace; font-size:12px; letter-spacing:0.05em; color:var(--text-muted); text-transform:uppercase;}
+  .ledger-head .dot{width:7px; height:7px; border-radius:50%; background:var(--sync); display:inline-block; margin-right:8px;}
+  .ledger-row{
+    display:grid; grid-template-columns:1fr auto auto auto; gap:14px; align-items:center;
+    padding:14px 18px; border-bottom:1px solid var(--border); font-family:'JetBrains Mono',monospace; font-size:12.5px;
+  }
+  .ledger-row:last-child{border-bottom:none;}
+  .item-name{font-family:'Inter',sans-serif; font-size:13.5px; color:var(--text); font-weight:500;}
+  .qty{color:var(--text-muted); text-align:right; min-width:70px;}
+  .qty b{color:var(--text); font-weight:600;}
+  .tag{
+    padding:4px 9px; border-radius:2px; font-size:10.5px; font-weight:600; letter-spacing:0.04em;
+    text-transform:uppercase; text-align:center; min-width:78px; transition:background .4s, color .4s;
+  }
+  .tag.st-ghost{background:var(--ghost-dim); color:var(--ghost);}
+  .tag.st-phantom{background:var(--phantom-dim); color:var(--phantom);}
+  .tag.st-sync{background:var(--sync-dim); color:var(--sync);}
+
+  /* ---- problem section ---- */
+  .section{padding:88px 0;}
+  .section-head{max-width:640px; margin-bottom:48px;}
+  h2{font-family:'Oswald',sans-serif; font-weight:600; font-size:clamp(26px,3.4vw,36px); letter-spacing:-0.005em; margin-bottom:14px;}
+  .section-sub{color:var(--text-muted); font-size:16px;}
+
+  .problem-grid{display:grid; grid-template-columns:1fr; gap:20px;}
+  @media(min-width:760px){ .problem-grid{grid-template-columns:1fr 1fr;} }
+  .tagcard{
+    position:relative; background:var(--panel); border:1px solid var(--border); border-radius:6px;
+    padding:30px 28px 26px; clip-path:polygon(0 0,calc(100% - 22px) 0,100% 22px,100% 100%,0 100%);
+  }
+  .tagcard::before{
+    content:''; position:absolute; top:9px; right:9px; width:12px; height:12px;
+    border-radius:50%; background:var(--bg); border:1px solid var(--border);
+  }
+  .tagcard .stamp{
+    font-family:'JetBrains Mono',monospace; font-weight:700; font-size:13px; letter-spacing:0.08em;
+    padding:5px 10px; border-radius:2px; display:inline-block; margin-bottom:16px;
+  }
+  .tagcard.ghost .stamp{background:var(--ghost-dim); color:var(--ghost);}
+  .tagcard.phantom .stamp{background:var(--phantom-dim); color:var(--phantom);}
+  .tagcard p{color:var(--text-muted); font-size:15px;}
+  .tagcard p b{color:var(--text); font-weight:600;}
+
+  /* ---- how it works ---- */
+  .manifest{border-top:1px solid var(--border);}
+  .manifest-row{
+    display:grid; grid-template-columns:56px 1fr; gap:20px; padding:26px 0; border-bottom:1px solid var(--border);
+  }
+  .manifest-num{font-family:'JetBrains Mono',monospace; font-size:22px; font-weight:600; color:var(--phantom);}
+  .manifest-row h3{font-family:'Oswald',sans-serif; font-size:19px; font-weight:600; margin-bottom:6px;}
+  .manifest-row p{color:var(--text-muted); font-size:15px; max-width:60ch;}
+
+  /* ---- audience ---- */
+  .audience-grid{display:grid; grid-template-columns:1fr; gap:20px;}
+  @media(min-width:760px){ .audience-grid{grid-template-columns:1fr 1fr;} }
+  .acard{background:var(--panel-2); border:1px solid var(--border); border-radius:6px; padding:28px;}
+  .acard .icon{width:36px; height:36px; margin-bottom:16px; color:var(--sync);}
+  .acard h3{font-family:'Oswald',sans-serif; font-size:19px; font-weight:600; margin-bottom:8px;}
+  .acard p{color:var(--text-muted); font-size:14.5px;}
+
+  /* ---- final cta ---- */
+  .final-cta{background:var(--panel); border-top:1px solid var(--border); border-bottom:1px solid var(--border); padding:80px 0;}
+  .final-cta .wrap{text-align:center; max-width:640px;}
+  .final-cta form.waitlist{margin:0 auto; justify-content:center;}
+  .final-cta .form-note{text-align:center;}
+  .final-cta .form-success{text-align:center;}
+
+  footer{padding:36px 0; }
+  footer .wrap{display:flex; flex-direction:column; gap:8px; align-items:center; text-align:center;}
+  footer p{font-family:'JetBrains Mono',monospace; font-size:11.5px; color:var(--text-muted);}
+</style>
+</head>
+<body>
+
+<header>
+  <nav class="wrap">
+    <div><span class="word">Revita<span>Stock</span></span><span class="tagline">// eBay inventory audit</span></div>
+    <a href="#waitlist" class="nav-cta">Get early access</a>
+  </nav>
+</header>
+
+<section class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <span class="eyebrow">Built for one-off item sellers</span>
+      <h1>Your shelf and your listings should never disagree.</h1>
+      <p class="sub">RevitaStock cross-checks what's physically on your shelf against what's live on eBay — so a sold-out part doesn't sit there waiting to tank your seller status, and stock you actually have doesn't sit invisible to buyers.</p>
+      <form class="waitlist" id="waitlistForm">
+        <input type="email" placeholder="you@email.com" required aria-label="Email address">
+        <button type="submit" class="btn-primary">Join waitlist</button>
+      </form>
+      <p class="form-note" id="formNote">No spam. One note when RevitaStock is ready to connect your store.</p>
+      <p class="form-success" id="formSuccess">You're on the list. We'll email you when early access opens.</p>
+    </div>
+
+    <div class="ledger" aria-label="Live example of RevitaStock catching inventory discrepancies">
+      <div class="ledger-head">
+        <span class="title"><span class="dot"></span>Discrepancy check</span>
+        <span class="title">4 SKUs</span>
+      </div>
+      <div class="ledger-row">
+        <span class="item-name">Kawasaki carburetor</span>
+        <span class="qty">shelf <b>0</b></span>
+        <span class="qty">live <b id="r1live">1</b></span>
+        <span class="tag st-ghost" id="r1tag">Ghost listing</span>
+      </div>
+      <div class="ledger-row">
+        <span class="item-name">Trucker jacket, vintage</span>
+        <span class="qty">shelf <b>1</b></span>
+        <span class="qty">live <b id="r2live">0</b></span>
+        <span class="tag st-phantom" id="r2tag">Phantom drop</span>
+      </div>
+      <div class="ledger-row">
+        <span class="item-name">Alternator, 1998 Civic</span>
+        <span class="qty">shelf <b>1</b></span>
+        <span class="qty">live <b>1</b></span>
+        <span class="tag st-sync">In sync</span>
+      </div>
+      <div class="ledger-row">
+        <span class="item-name">Ceramic bowl set</span>
+        <span class="qty">shelf <b>0</b></span>
+        <span class="qty">live <b>0</b></span>
+        <span class="tag st-sync">In sync</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="wrap">
+    <div class="section-head">
+      <h2>Two ways your inventory quietly goes wrong</h2>
+      <p class="section-sub">Neither shows up as an error. They just cost you, silently, until you catch them by accident.</p>
+    </div>
+    <div class="problem-grid">
+      <div class="tagcard ghost">
+        <span class="stamp">Ghost listing</span>
+        <p>The item's gone from your shelf, but the listing's still live. Someone buys it anyway — now you're <b>canceling the order</b>, eating an out-of-stock defect, and hoping it doesn't tip your seller standing.</p>
+      </div>
+      <div class="tagcard phantom">
+        <span class="stamp">Phantom drop</span>
+        <p>The item's sitting right there, but the listing shows zero. No error, no warning — just <b>a sale that never happens</b> because nobody could buy what they couldn't see.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="wrap">
+    <div class="section-head">
+      <h2>Three steps, no guesswork</h2>
+    </div>
+    <div class="manifest">
+      <div class="manifest-row">
+        <span class="manifest-num">01</span>
+        <div><h3>Upload your count</h3><p>Drop in a CSV of what's actually on your shelf — auto parts, one-off vintage finds, whatever you sell.</p></div>
+      </div>
+      <div class="manifest-row">
+        <span class="manifest-num">02</span>
+        <div><h3>Connect your store</h3><p>Link your eBay account once. RevitaStock reads your live listings — nothing more, nothing changed without your say-so.</p></div>
+      </div>
+      <div class="manifest-row">
+        <span class="manifest-num">03</span>
+        <div><h3>Get your discrepancy list</h3><p>See every ghost listing and phantom drop in one place, and push the fix back to eBay in a click.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="wrap">
+    <div class="section-head">
+      <h2>Built with two kinds of sellers in mind</h2>
+    </div>
+    <div class="audience-grid">
+      <div class="acard">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 12h4l2-7h6l2 7h4M5 12v6a1 1 0 001 1h12a1 1 0 001-1v-6M9 19v-3M15 19v-3"/></svg>
+        <h3>Auto parts and salvage</h3>
+        <p>Every part is a one-off. When it's gone, it's gone — the listing needs to know that instantly, not after the next customer orders it.</p>
+      </div>
+      <div class="acard">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 4l1.5 3h9L18 4M4 7h16l-1.5 13a2 2 0 01-2 2H7.5a2 2 0 01-2-2L4 7z"/></svg>
+        <h3>Thrift and vintage resellers</h3>
+        <p>One item, one listing, no restock. If your count and your listing drift apart, you're usually the last one to find out.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="final-cta" id="waitlist">
+  <div class="wrap">
+    <h2>RevitaStock is in active development.</h2>
+    <p class="section-sub" style="margin-bottom:28px;">Early access opens this fall. Join the list and we'll reach out the moment it's ready to connect your store.</p>
+    <form class="waitlist" id="waitlistForm2">
+      <input type="email" placeholder="you@email.com" required aria-label="Email address">
+      <button type="submit" class="btn-primary">Join waitlist</button>
+    </form>
+    <p class="form-note">No spam. One note when RevitaStock is ready.</p>
+    <p class="form-success" id="formSuccess2">You're on the list. We'll email you when early access opens.</p>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p>&copy; 2026 RevitaStock. Not affiliated with or endorsed by eBay Inc.</p>
+  </div>
+</footer>
+
+<script>
+  function handleWaitlist(formId, successId, noteEl){
+    const form = document.getElementById(formId);
+    const success = document.getElementById(successId);
+    form.addEventListener('submit', function(e){
+      e.preventDefault();
+      form.style.display = 'none';
+      if(noteEl) noteEl.style.display = 'none';
+      success.classList.add('show');
+    });
+  }
+  handleWaitlist('waitlistForm','formSuccess', document.getElementById('formNote'));
+  handleWaitlist('waitlistForm2','formSuccess2', null);
+
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if(!reduceMotion){
+    let state = 0;
+    const r1tag = document.getElementById('r1tag');
+    const r1live = document.getElementById('r1live');
+    const r2tag = document.getElementById('r2tag');
+    const r2live = document.getElementById('r2live');
+    setInterval(function(){
+      state = state === 0 ? 1 : 0;
+      if(state === 0){
+        r1tag.textContent = 'Ghost listing'; r1tag.className = 'tag st-ghost'; r1live.textContent = '1';
+        r2tag.textContent = 'Phantom drop'; r2tag.className = 'tag st-phantom'; r2live.textContent = '0';
+      } else {
+        r1tag.textContent = 'Fixed'; r1tag.className = 'tag st-sync'; r1live.textContent = '0';
+        r2tag.textContent = 'Fixed'; r2tag.className = 'tag st-sync'; r2live.textContent = '1';
+      }
+    }, 2600);
+  }
+</script>
+
+</body>
+</html>
