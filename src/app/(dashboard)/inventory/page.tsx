@@ -5,7 +5,7 @@ import CsvUploadForm from "@/components/inventory/CsvUploadForm";
 import InventoryTable from "@/components/inventory/InventoryTable";
 
 export default async function InventoryPage() {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const {
     data: { user },

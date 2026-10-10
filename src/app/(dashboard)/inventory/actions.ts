@@ -23,7 +23,7 @@ export async function saveInventoryRows(
     return { success: false, savedCount: 0, error: "No rows to save." };
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const {
     data: { user },

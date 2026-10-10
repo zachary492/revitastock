@@ -14,7 +14,7 @@ export default async function SettingsPage({
 }: {
   searchParams: { ebay?: string; ebay_error?: string };
 }) {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const {
     data: { user },
