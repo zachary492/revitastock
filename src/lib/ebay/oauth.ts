@@ -22,8 +22,8 @@ const SCOPES = ["https://api.ebay.com/oauth/api_scope/sell.inventory"];
  */
 export function getEbayAuthorizeUrl(): string {
   const params = new URLSearchParams({
-    client_id: process.env.EBAY_CLIENT_ID!,
-    redirect_uri: process.env.EBAY_RUNAME!, // yes, the RuName, not a URL
+    client_id: process.env.EBAY_CLIENT_ID!.trim(),
+    redirect_uri: process.env.EBAY_RUNAME!.trim(), // yes, the RuName, not a URL
     response_type: "code",
     scope: SCOPES.join(" "),
   });
@@ -45,7 +45,7 @@ export async function exchangeCodeForTokens(
   code: string
 ): Promise<EbayTokenResponse> {
   const basicAuth = Buffer.from(
-    `${process.env.EBAY_CLIENT_ID}:${process.env.EBAY_CLIENT_SECRET}`
+    `${process.env.EBAY_CLIENT_ID}:${process.env.EBAY_CLIENT_SECRET}.trim()`
   ).toString("base64");
 
   const res = await fetch(`${EBAY_API_BASE}/identity/v1/oauth2/token`, {
@@ -57,7 +57,7 @@ export async function exchangeCodeForTokens(
     body: new URLSearchParams({
       grant_type: "authorization_code",
       code: decodeURIComponent(code),
-      redirect_uri: process.env.EBAY_RUNAME!,
+      redirect_uri: process.env.EBAY_RUNAME!.trim(),
     }),
   });
 
