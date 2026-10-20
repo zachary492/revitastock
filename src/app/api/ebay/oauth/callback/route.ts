@@ -39,10 +39,13 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(
       new URL("/settings?ebay=connected", request.url)
     );
-  } catch (err) {
+    } catch (err) {
     console.error("eBay OAuth callback error:", err);
+    const message = err instanceof Error ? err.message : "unknown error";
     return NextResponse.redirect(
-      new URL("/settings?ebay_error=token_exchange_failed", request.url)
+      new URL(
+        `/settings?ebay_error=${encodeURIComponent(message.slice(0, 300))}`,
+        request.url
+      )
     );
   }
-}
