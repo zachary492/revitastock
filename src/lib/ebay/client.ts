@@ -18,9 +18,11 @@ export async function ebayFetch<T>({
 }: EbayFetchOptions): Promise<T> {
   const res = await fetch(`${EBAY_API_BASE}${path}`, {
     method,
-    headers: {
+        headers: {
       Authorization: `Bearer ${accessToken}`,
       "Content-Type": "application/json",
+      "Accept-Language": "en-US",
+      "Content-Language": "en-US",
     },
     body: body ? JSON.stringify(body) : undefined,
   });
