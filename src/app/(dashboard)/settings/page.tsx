@@ -110,13 +110,9 @@ export default async function SettingsPage({
               <p className="mt-2 text-sm text-gray-600">{sellingResult}</p>
             )}
             {sellingError && (
+              
               <p className="mt-2 text-sm text-red-600">
-                Selling lists check failed: {sellingError}
-              </p>
-            )}
-              <p className="mt-2 text-sm text-red-600">
-                Live check failed: {liveCheckError}
-              </p>
+Selling lists check failed: {sellingError}              </p>
             )}
             <a
               href={getEbayAuthorizeUrl()}
