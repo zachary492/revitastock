@@ -4,6 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getEbayAuthorizeUrl } from "@/lib/ebay/oauth";
 import { ebayFetch } from "@/lib/ebay/client";
 
+import { getSellingCounts } from "@/lib/ebay/trading";
+
 interface EbayInventoryItemsResponse {
   total?: number;
   inventoryItems?: { sku: string }[];
@@ -32,8 +34,17 @@ export default async function SettingsPage({
 
   let liveCheckResult: string | null = null;
   let liveCheckError: string | null = null;
+    let sellingResult: string | null = null;
+  let sellingError: string | null = null;
 
   if (connection) {
+        try {
+      const counts = await getSellingCounts(connection.access_token);
+      sellingResult = `Selling lists — active: ${counts.active}, sold (last 60 days): ${counts.sold}, ended unsold (last 60 days): ${counts.unsold}.`;
+    } catch (err) {
+      sellingError =
+        err instanceof Error ? err.message : "Couldn't read your selling lists.";
+    }
     try {
       const data = await ebayFetch<EbayInventoryItemsResponse>({
         path: "/sell/inventory/v1/inventory_item?limit=5",
@@ -90,7 +101,15 @@ export default async function SettingsPage({
             {liveCheckResult && (
               <p className="mt-2 text-sm text-gray-600">{liveCheckResult}</p>
             )}
-            {liveCheckError && (
+            {liveCheckError && (...)}
+                        {sellingResult && (
+              <p className="mt-2 text-sm text-gray-600">{sellingResult}</p>
+            )}
+            {sellingError && (
+              <p className="mt-2 text-sm text-red-600">
+                Selling lists check failed: {sellingError}
+              </p>
+            )}
               <p className="mt-2 text-sm text-red-600">
                 Live check failed: {liveCheckError}
               </p>
