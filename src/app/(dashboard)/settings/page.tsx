@@ -101,8 +101,12 @@ export default async function SettingsPage({
             {liveCheckResult && (
               <p className="mt-2 text-sm text-gray-600">{liveCheckResult}</p>
             )}
-            {liveCheckError && (...)}
-                        {sellingResult && (
+                        {liveCheckError && (
+              <p className="mt-2 text-sm text-red-600">
+                Live check failed: {liveCheckError}
+              </p>
+            )}
+            {sellingResult && (
               <p className="mt-2 text-sm text-gray-600">{sellingResult}</p>
             )}
             {sellingError && (
