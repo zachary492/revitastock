@@ -1,5 +1,5 @@
 const EBAY_API_BASE =
-  process.env.EBAY_ENV === "production"
+process.env.EBAY_ENV?.trim().toLowerCase() === "production"
     ? "https://api.ebay.com"
     : "https://api.sandbox.ebay.com";
 

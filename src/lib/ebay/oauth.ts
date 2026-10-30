@@ -1,5 +1,5 @@
 const EBAY_AUTH_BASE =
-  process.env.EBAY_ENV === "production"
+process.env.EBAY_ENV?.trim().toLowerCase() === "production"
     ? "https://auth.ebay.com"
     : "https://auth.sandbox.ebay.com";
 
