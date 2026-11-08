@@ -4,8 +4,9 @@ import { join } from "path";
 import { parseSellingLists } from "../../src/lib/ebay/sellingLists";
 import { decodeEntities, section, sections } from "../../src/lib/ebay/xml";
 
-// Real GetMyeBaySelling response structure, with titles, ids, prices and
-// sales identifiers replaced by neutral values.
+// Real GetMyeBaySelling response structure (captured after labeling two
+// listings), with titles, ids, prices and sales identifiers replaced by
+// neutral values. The TIE-001/TIE-002 labels are as eBay returned them.
 const sample = readFileSync(
   join(__dirname, "../fixtures/selling-sample.xml"),
   "utf8"
@@ -36,7 +37,7 @@ describe("parseSellingLists (real response shape)", () => {
     expect(lists.active[0]).toEqual({
       itemId: "100000000001",
       title: "Test listing 1",
-      sku: null,
+      sku: "TIE-001",
       status: "active",
       listingType: "FixedPriceItem",
       quantityAvailable: 1,
@@ -77,9 +78,16 @@ describe("parseSellingLists (real response shape)", () => {
     expect(lists.endedUnsold[0]?.relisted).toBe(false);
   });
 
-  it("has no SKUs, because none of these listings have a custom label", () => {
-    const all = [...lists.active, ...lists.sold, ...lists.endedUnsold];
-    expect(all.every((r) => r.sku === null)).toBe(true);
+  it("reads the Custom Label (<SKU>) when a listing has one", () => {
+    expect(lists.active[0]?.sku).toBe("TIE-001");
+    expect(lists.active[1]?.sku).toBe("TIE-002");
+  });
+
+  it("leaves sku null for listings without a label", () => {
+    expect(lists.active[2]?.sku).toBeNull();
+    // Ended and sold listings in this sample were never labeled.
+    expect(lists.sold.every((r) => r.sku === null)).toBe(true);
+    expect(lists.endedUnsold.every((r) => r.sku === null)).toBe(true);
   });
 });
 
