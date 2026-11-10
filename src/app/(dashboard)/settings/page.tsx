@@ -2,14 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getEbayAuthorizeUrl } from "@/lib/ebay/oauth";
-import { ebayFetch } from "@/lib/ebay/client";
-
-import { getSellingCounts } from "@/lib/ebay/trading";
-
-interface EbayInventoryItemsResponse {
-  total?: number;
-  inventoryItems?: { sku: string }[];
-}
+import { fetchAllSellingLists } from "@/lib/ebay/sellingFetch";
 
 export default async function SettingsPage({
   searchParams,
@@ -32,32 +25,25 @@ export default async function SettingsPage({
     .eq("user_id", user.id)
     .maybeSingle();
 
-  let liveCheckResult: string | null = null;
-  let liveCheckError: string | null = null;
-    let sellingResult: string | null = null;
+  let sellingSummary: string | null = null;
+  let sellingWarning: string | null = null;
   let sellingError: string | null = null;
 
   if (connection) {
-        try {
-      const counts = await getSellingCounts(connection.access_token);
-      sellingResult = `Selling lists — active: ${counts.active}, sold (last 60 days): ${counts.sold}, ended unsold (last 60 days): ${counts.unsold}.`;
-    } catch (err) {
-      sellingError =
-        err instanceof Error ? err.message : "Couldn't read your selling lists.";
-    }
     try {
-      const data = await ebayFetch<EbayInventoryItemsResponse>({
-        path: "/sell/inventory/v1/inventory_item?limit=5",
-        accessToken: connection.access_token,
-      });
-      const count = data.inventoryItems?.length ?? 0;
-      liveCheckResult =
-        count > 0
-          ? `Found ${count} item(s) on your Sandbox account.`
-          : "Connected successfully — 0 items found (normal for a fresh Sandbox test account).";
+      const { lists, totals, complete } = await fetchAllSellingLists(
+        connection.access_token
+      );
+      sellingSummary = `Selling lists — active: ${lists.active.length}, sold (last 60 days): ${lists.sold.length}, ended unsold (last 60 days): ${lists.endedUnsold.length}.`;
+      if (!complete) {
+        sellingWarning = `Some listings were not loaded. eBay reports ${totals.active} active, ${totals.sold} sold and ${totals.endedUnsold} ended unsold.`;
+      }
     } catch (err) {
-      liveCheckError =
-        err instanceof Error ? err.message : "Couldn't reach eBay's API.";
+      const message =
+        err instanceof Error ? err.message : "Couldn't read your selling lists.";
+      sellingError = /932|expired/i.test(message)
+        ? "Your eBay connection has expired. Click Reconnect below."
+        : `Selling lists check failed: ${message}`;
     }
   }
 
@@ -98,21 +84,14 @@ export default async function SettingsPage({
               ✓ Connected since{" "}
               {new Date(connection.connected_at).toLocaleString()}
             </p>
-            {liveCheckResult && (
-              <p className="mt-2 text-sm text-gray-600">{liveCheckResult}</p>
+            {sellingSummary && (
+              <p className="mt-2 text-sm text-gray-600">{sellingSummary}</p>
             )}
-                        {liveCheckError && (
-              <p className="mt-2 text-sm text-red-600">
-                Live check failed: {liveCheckError}
-              </p>
-            )}
-            {sellingResult && (
-              <p className="mt-2 text-sm text-gray-600">{sellingResult}</p>
+            {sellingWarning && (
+              <p className="mt-2 text-sm text-amber-700">{sellingWarning}</p>
             )}
             {sellingError && (
-              
-              <p className="mt-2 text-sm text-red-600">
-Selling lists check failed: {sellingError}              </p>
+              <p className="mt-2 text-sm text-red-600">{sellingError}</p>
             )}
             <a
               href={getEbayAuthorizeUrl()}
@@ -128,7 +107,7 @@ Selling lists check failed: {sellingError}              </p>
               href={getEbayAuthorizeUrl()}
               className="inline-block rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800"
             >
-              Connect eBay (Sandbox)
+              Connect eBay
             </a>
           </>
         )}
