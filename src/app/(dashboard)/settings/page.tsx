@@ -7,8 +7,9 @@ import { fetchAllSellingLists } from "@/lib/ebay/sellingFetch";
 export default async function SettingsPage({
   searchParams,
 }: {
-  searchParams: { ebay?: string; ebay_error?: string };
+  searchParams: Promise<{ ebay?: string; ebay_error?: string }>;
 }) {
+  const params = await searchParams;
   const supabase = await createClient();
 
   const {
@@ -61,15 +62,15 @@ export default async function SettingsPage({
         inventory.
       </p>
 
-      {searchParams.ebay === "connected" && (
+      {params.ebay === "connected" && (
         <p className="mb-4 rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">
           eBay account connected.
         </p>
       )}
-      {searchParams.ebay_error && (
+      {params.ebay_error && (
         <p className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
           Something went wrong connecting your eBay account (
-          {searchParams.ebay_error}). Try again below.
+          {params.ebay_error}). Try again below.
         </p>
       )}
 
@@ -93,6 +94,13 @@ export default async function SettingsPage({
             {sellingError && (
               <p className="mt-2 text-sm text-red-600">{sellingError}</p>
             )}
+            <Link
+              href="/listings"
+              className="mt-3 inline-block text-sm text-gray-700 underline underline-offset-2"
+            >
+              View your listings →
+            </Link>
+            <br />
             <a
               href={getEbayAuthorizeUrl()}
               className="mt-4 inline-block text-sm text-gray-500 underline underline-offset-2"
