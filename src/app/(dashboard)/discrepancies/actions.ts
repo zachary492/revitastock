@@ -59,7 +59,8 @@ export async function runAudit(): Promise<RunAuditResult> {
     .from("discrepancies")
     .delete()
     .eq("user_id", user.id)
-    .eq("resolved", false);
+    .eq("resolved", false)
+    .in("type", ["ghost_listing", "phantom_drop", "quantity_mismatch"]);
 
   if (deleteError) {
     return { success: false, error: deleteError.message };

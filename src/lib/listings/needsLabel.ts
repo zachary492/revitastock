@@ -145,7 +145,12 @@ function newestFirst(a: ListingRecord, b: ListingRecord): number {
  *
  * Compares every pair of listings, which is fine for a few thousand listings.
  */
-export function groupUnlabeled(records: ListingRecord[]): NeedsLabelGroup[] {
+export function groupUnlabeled(
+  records: ListingRecord[],
+  options: { isolated?: ReadonlySet<string> } = {}
+): NeedsLabelGroup[] {
+  // Item IDs the seller said are NOT the same item: never joined by title.
+  const isolated = options.isolated ?? new Set<string>();
   const n = records.length;
   const tokens = records.map((r) => titleTokens(r.title));
   const labels = records.map((r) => normalizeLabel(r.sku));
@@ -186,6 +191,8 @@ export function groupUnlabeled(records: ListingRecord[]): NeedsLabelGroup[] {
     for (let j = i + 1; j < n; j++) {
       // Two different labels are different items on purpose; never merge by title.
       if (labels[i] && labels[j] && labels[i] !== labels[j]) continue;
+      if (isolated.has(records[i]?.itemId ?? "")) continue;
+      if (isolated.has(records[j]?.itemId ?? "")) continue;
       const a = tokens[i];
       const b = tokens[j];
       if (!a || !b) continue;
