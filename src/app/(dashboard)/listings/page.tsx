@@ -3,26 +3,13 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getEbayAuthorizeUrl } from "@/lib/ebay/oauth";
 import { fetchAllSellingLists } from "@/lib/ebay/sellingFetch";
-import { groupUnlabeled } from "@/lib/listings/needsLabel";
+import type { ListingRecord } from "@/lib/ebay/sellingLists";
 import {
-  filterListings,
-  isFilter,
-  organizeListings,
-  summarize,
-  type ListingFilter,
-  type ListingRow,
-} from "@/lib/listings/organize";
+  groupUnlabeled,
+  type NeedsLabelGroup,
+} from "@/lib/listings/needsLabel";
 
-const FILTER_LABELS: Record<ListingFilter, string> = {
-  all: "All",
-  active: "Active",
-  sold: "Sold",
-  ended: "Ended unsold",
-  unlabeled: "No label",
-  shared: "Same label twice",
-};
-
-const STATUS_STYLES: Record<ListingRow["status"], { text: string; className: string }> = {
+const STATUS_STYLES: Record<ListingRecord["status"], { text: string; className: string }> = {
   active: { text: "Active", className: "bg-green-50 text-green-700" },
   sold: { text: "Sold", className: "bg-blue-50 text-blue-700" },
   ended_unsold: { text: "Ended", className: "bg-amber-50 text-amber-700" },
@@ -38,20 +25,97 @@ function formatDate(value: string | null): string {
   });
 }
 
-function dateFor(row: ListingRow): string {
+function dateFor(row: ListingRecord): string {
   if (row.status === "sold") return `Sold ${formatDate(row.soldAt)}`;
   if (row.status === "ended_unsold") return `Ended ${formatDate(row.endTime)}`;
-  return row.endTime ? `Ends ${formatDate(row.endTime)}` : "Until cancelled";
+  return "Live";
 }
 
-export default async function ListingsPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ status?: string }>;
-}) {
-  const { status } = await searchParams;
-  const filter: ListingFilter = isFilter(status) ? status : "all";
+function Lines({ rows }: { rows: ListingRecord[] }) {
+  return (
+    <table className="w-full text-left text-sm">
+      <tbody>
+        {rows.map((row) => {
+          const style = STATUS_STYLES[row.status];
+          return (
+            <tr
+              key={`${row.status}-${row.itemId}-${row.soldAt ?? ""}`}
+              className="border-t border-gray-100 align-top"
+            >
+              <td className="w-20 py-1.5 pr-3">
+                <span
+                  className={`rounded px-2 py-0.5 text-xs font-medium ${style.className}`}
+                >
+                  {style.text}
+                </span>
+              </td>
+              <td className="w-24 py-1.5 pr-3 font-mono text-xs">
+                {row.sku ?? <span className="text-gray-400">no label</span>}
+              </td>
+              <td className="py-1.5 pr-3">{row.title}</td>
+              <td className="w-20 py-1.5 pr-3">
+                {row.price === null ? "—" : `$${row.price.toFixed(2)}`}
+              </td>
+              <td className="w-32 py-1.5 pr-3 text-gray-600">{dateFor(row)}</td>
+              <td className="w-32 py-1.5 font-mono text-xs">
+                <a
+                  href={`https://www.ebay.com/itm/${row.itemId}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="underline underline-offset-2"
+                >
+                  {row.itemId}
+                </a>
+              </td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  );
+}
 
+function Confidence({ value }: { value: NeedsLabelGroup["confidence"] }) {
+  return value === "same" ? (
+    <span className="rounded bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">
+      Same title
+    </span>
+  ) : (
+    <span className="rounded bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
+      Similar title
+    </span>
+  );
+}
+
+function GroupCard({ group }: { group: NeedsLabelGroup }) {
+  return (
+    <section className="mb-4 rounded-md border border-gray-200 p-4">
+      <div className="mb-2 flex flex-wrap items-center gap-2 text-sm">
+        {group.kind === "matches_label" && (
+          <span>
+            Looks like <span className="font-mono">{group.suggestedLabel}</span>
+          </span>
+        )}
+        {group.kind === "conflict" && (
+          <span>
+            Looks like one item, but it matches different labels. Check these.
+          </span>
+        )}
+        {group.kind === "new_item" && (
+          <span>
+            No label yet ({group.unlabeled.length}{" "}
+            {group.unlabeled.length === 1 ? "listing" : "listings"})
+          </span>
+        )}
+        <Confidence value={group.confidence} />
+      </div>
+      {group.labeled.length > 0 && <Lines rows={group.labeled} />}
+      <Lines rows={group.unlabeled} />
+    </section>
+  );
+}
+
+export default async function NeedsLabelPage() {
   const supabase = await createClient();
   const {
     data: { user },
@@ -67,7 +131,7 @@ export default async function ListingsPage({
     .eq("user_id", user.id)
     .maybeSingle();
 
-  let rows: ListingRow[] = [];
+  let groups: NeedsLabelGroup[] = [];
   let warning: string | null = null;
   let error: string | null = null;
 
@@ -76,7 +140,11 @@ export default async function ListingsPage({
       const { lists, totals, complete } = await fetchAllSellingLists(
         connection.access_token
       );
-      rows = organizeListings(lists);
+      groups = groupUnlabeled([
+        ...lists.active,
+        ...lists.endedUnsold,
+        ...lists.sold,
+      ]);
       if (!complete) {
         warning = `Some listings were not loaded. eBay reports ${totals.active} active, ${totals.sold} sold and ${totals.endedUnsold} ended unsold.`;
       }
@@ -89,22 +157,30 @@ export default async function ListingsPage({
     }
   }
 
-  const summary = summarize(rows);
-  const visible = filterListings(rows, filter);
-  const needsLabelGroups = groupUnlabeled(rows).length;
+  const matches = groups.filter((g) => g.kind === "matches_label");
+  const conflicts = groups.filter((g) => g.kind === "conflict");
+  const repeated = groups.filter(
+    (g) => g.kind === "new_item" && g.unlabeled.length > 1
+  );
+  const singles = groups.filter(
+    (g) => g.kind === "new_item" && g.unlabeled.length === 1
+  );
+  const liveSingles = singles.filter((g) => g.liveCount > 0);
+  const otherSingles = singles.filter((g) => g.liveCount === 0);
+  const unlabeledTotal = groups.reduce((sum, g) => sum + g.unlabeled.length, 0);
 
   return (
     <main className="mx-auto max-w-5xl px-6 py-16">
       <Link
-        href="/dashboard"
+        href="/listings"
         className="mb-6 inline-block text-sm text-gray-500 underline underline-offset-2"
       >
-        ← Back to dashboard
+        ← Back to your listings
       </Link>
-      <h1 className="mb-1 text-2xl font-semibold tracking-tight">Your listings</h1>
+      <h1 className="mb-1 text-2xl font-semibold tracking-tight">Needs a label</h1>
       <p className="mb-6 text-sm text-gray-600">
-        Everything eBay reports for your account: active listings, plus sold and
-        ended items from the last 60 days.
+        Listings with no custom label, grouped when the titles look like the same
+        item. These are suggestions only. Nothing is changed on eBay.
       </p>
 
       {!connection && (
@@ -133,103 +209,65 @@ export default async function ListingsPage({
 
       {connection && !error && (
         <>
-          <p className="mb-4 text-sm text-gray-600">
-            {summary.total} listings: {summary.active} active, {summary.sold} sold,{" "}
-            {summary.endedUnsold} ended unsold. {summary.labeled} have a label,{" "}
-            {summary.unlabeled} don&apos;t.
-            {summary.sharedLabels > 0 &&
-              ` ${summary.sharedLabels} label${summary.sharedLabels === 1 ? " is" : "s are"} used on more than one listing (relists).`}
+          <p className="mb-6 text-sm text-gray-600">
+            {unlabeledTotal} listings have no label, in {groups.length} groups.
           </p>
 
-          <nav className="mb-4 flex flex-wrap gap-2 text-sm">
-            {(Object.keys(FILTER_LABELS) as ListingFilter[]).map((key) => (
-              <Link
-                key={key}
-                href={key === "all" ? "/listings" : `/listings?status=${key}`}
-                className={
-                  key === filter
-                    ? "rounded-md bg-gray-900 px-3 py-1 text-white"
-                    : "rounded-md border border-gray-300 px-3 py-1 text-gray-700 hover:bg-gray-50"
-                }
-              >
-                {FILTER_LABELS[key]}
-              </Link>
-            ))}
-          </nav>
-
-          {needsLabelGroups > 0 && (
-            <p className="mb-4 text-sm">
-              <Link
-                href="/listings/needs-label"
-                className="underline underline-offset-2"
-              >
-                See suggestions for listings with no label ({needsLabelGroups} groups) →
-              </Link>
-            </p>
+          {matches.length > 0 && (
+            <>
+              <h2 className="mb-2 text-lg font-semibold">
+                Looks like an item you already labeled ({matches.length})
+              </h2>
+              {matches.map((g) => (
+                <GroupCard key={g.id} group={g} />
+              ))}
+            </>
           )}
 
-          {visible.length === 0 ? (
-            <p className="text-sm text-gray-500">Nothing to show here.</p>
-          ) : (
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="border-b border-gray-200 text-gray-500">
-                  <th className="py-2 pr-3 font-medium">Status</th>
-                  <th className="py-2 pr-3 font-medium">Label</th>
-                  <th className="py-2 pr-3 font-medium">Title</th>
-                  <th className="py-2 pr-3 font-medium">Item ID</th>
-                  <th className="py-2 pr-3 font-medium">Price</th>
-                  <th className="py-2 font-medium">Date</th>
-                </tr>
-              </thead>
-              <tbody>
-                {visible.map((row) => {
-                  const style = STATUS_STYLES[row.status];
-                  return (
-                    <tr
-                      key={`${row.status}-${row.itemId}-${row.soldAt ?? ""}`}
-                      className="border-b border-gray-100 align-top"
-                    >
-                      <td className="py-2 pr-3">
-                        <span
-                          className={`rounded px-2 py-0.5 text-xs font-medium ${style.className}`}
-                        >
-                          {style.text}
-                        </span>
-                        {row.relisted && (
-                          <span className="ml-1 text-xs text-gray-500">
-                            relisted
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-2 pr-3 font-mono">
-                        {row.sku ?? <span className="text-gray-400">—</span>}
-                        {row.sameLabelCount > 1 && (
-                          <span className="ml-1 text-xs text-amber-700">
-                            ×{row.sameLabelCount}
-                          </span>
-                        )}
-                      </td>
-                      <td className="max-w-xs py-2 pr-3">{row.title}</td>
-                      <td className="py-2 pr-3 font-mono text-xs">
-                        <a
-                          href={`https://www.ebay.com/itm/${row.itemId}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="underline underline-offset-2"
-                        >
-                          {row.itemId}
-                        </a>
-                      </td>
-                      <td className="py-2 pr-3">
-                        {row.price === null ? "—" : `$${row.price.toFixed(2)}`}
-                      </td>
-                      <td className="py-2 text-gray-600">{dateFor(row)}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          {conflicts.length > 0 && (
+            <>
+              <h2 className="mb-2 mt-6 text-lg font-semibold">
+                Check these ({conflicts.length})
+              </h2>
+              {conflicts.map((g) => (
+                <GroupCard key={g.id} group={g} />
+              ))}
+            </>
+          )}
+
+          {repeated.length > 0 && (
+            <>
+              <h2 className="mb-2 mt-6 text-lg font-semibold">
+                Same item listed more than once ({repeated.length})
+              </h2>
+              {repeated.map((g) => (
+                <GroupCard key={g.id} group={g} />
+              ))}
+            </>
+          )}
+
+          {liveSingles.length > 0 && (
+            <>
+              <h2 className="mb-2 mt-6 text-lg font-semibold">
+                Live listings with no label and no match ({liveSingles.length})
+              </h2>
+              <Lines rows={liveSingles.flatMap((g) => g.unlabeled)} />
+            </>
+          )}
+
+          {otherSingles.length > 0 && (
+            <>
+              <h2 className="mb-2 mt-6 text-lg font-semibold">
+                Older single listings with no label ({otherSingles.length})
+              </h2>
+              <Lines rows={otherSingles.flatMap((g) => g.unlabeled)} />
+            </>
+          )}
+
+          {groups.length === 0 && (
+            <p className="text-sm text-gray-500">
+              Every listing has a label. Nothing to do here.
+            </p>
           )}
         </>
       )}
