@@ -5,6 +5,7 @@ import { fetchAllSellingLists } from "@/lib/ebay/sellingFetch";
 import { applyLabelLinks, type LabelLink } from "@/lib/listings/labelLinks";
 import { runListingRules } from "@/lib/audit/listingRules";
 import { findingToRow, LISTING_RULE_TYPES } from "@/lib/audit/findingRows";
+import { findingKey, withoutDismissed } from "@/lib/audit/explain";
 
 export interface ListingAuditResult {
   success: boolean;
@@ -87,9 +88,29 @@ export async function runListingAudit(): Promise<ListingAuditResult> {
     return { success: false, error: deleteError.message };
   }
 
-  if (findings.length > 0) {
+  // Problems the seller already dismissed stay hidden.
+  const { data: dismissedRows, error: dismissedError } = await supabase
+    .from("discrepancies")
+    .select("type, sku, listing_id")
+    .eq("user_id", user.id)
+    .eq("resolved", true)
+    .in("type", LISTING_RULE_TYPES);
+  if (dismissedError) {
+    return { success: false, error: dismissedError.message };
+  }
+  const dismissedKeys = new Set<string>(
+    (dismissedRows ?? []).map((row) =>
+      findingKey(row.type, row.sku, row.listing_id)
+    )
+  );
+  const visibleFindings = withoutDismissed(
+    findings.map(findingToRow),
+    dismissedKeys
+  );
+
+  if (visibleFindings.length > 0) {
     const { error: insertError } = await supabase.from("discrepancies").insert(
-      findings.map((finding) => ({ user_id: user.id, ...findingToRow(finding) }))
+      visibleFindings.map((row) => ({ user_id: user.id, ...row }))
     );
     if (insertError) {
       return { success: false, error: insertError.message };
@@ -100,9 +121,11 @@ export async function runListingAudit(): Promise<ListingAuditResult> {
     success: true,
     listingsChecked:
       lists.active.length + lists.sold.length + lists.endedUnsold.length,
-    soldButStillActive: findings.filter((f) => f.rule === "sold_but_still_active")
-      .length,
-    endedNeverRelisted: findings.filter((f) => f.rule === "ended_never_relisted")
-      .length,
+    soldButStillActive: visibleFindings.filter(
+      (r) => r.type === "sold_but_still_active"
+    ).length,
+    endedNeverRelisted: visibleFindings.filter(
+      (r) => r.type === "ended_never_relisted"
+    ).length,
   };
 }
