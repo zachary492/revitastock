@@ -2,12 +2,31 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getEbayAuthorizeUrl } from "@/lib/ebay/oauth";
-import { fetchAllSellingLists } from "@/lib/ebay/sellingFetch";
+import { loadSellingListsForUser } from "@/lib/ebay/connection";
+import { refreshTokenNow } from "./actions";
+
+function formatTime(value: string | null): string | null {
+  if (!value) return null;
+  const time = Date.parse(value);
+  if (Number.isNaN(time)) return null;
+  return new Date(time).toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: "America/New_York",
+  });
+}
 
 export default async function SettingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ebay?: string; ebay_error?: string }>;
+  searchParams: Promise<{
+    ebay?: string;
+    ebay_error?: string;
+    refreshed?: string;
+    refresh_error?: string;
+  }>;
 }) {
   const params = await searchParams;
   const supabase = await createClient();
@@ -20,9 +39,12 @@ export default async function SettingsPage({
     redirect("/auth");
   }
 
+  // Loading the lists also renews the eBay token if it is about to expire.
+  const result = await loadSellingListsForUser(supabase, user.id);
+
   const { data: connection } = await supabase
     .from("ebay_connections")
-    .select("access_token, connected_at")
+    .select("connected_at, token_expires_at")
     .eq("user_id", user.id)
     .maybeSingle();
 
@@ -30,23 +52,25 @@ export default async function SettingsPage({
   let sellingWarning: string | null = null;
   let sellingError: string | null = null;
 
-  if (connection) {
-    try {
-      const { lists, totals, complete } = await fetchAllSellingLists(
-        connection.access_token
-      );
-      sellingSummary = `Selling lists — active: ${lists.active.length}, sold (last 60 days): ${lists.sold.length}, ended unsold (last 60 days): ${lists.endedUnsold.length}.`;
-      if (!complete) {
-        sellingWarning = `Some listings were not loaded. eBay reports ${totals.active} active, ${totals.sold} sold and ${totals.endedUnsold} ended unsold.`;
-      }
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Couldn't read your selling lists.";
-      sellingError = /932|expired/i.test(message)
-        ? "Your eBay connection has expired. Click Reconnect below."
-        : `Selling lists check failed: ${message}`;
+  if (result.status === "ok") {
+    const { lists, totals, complete } = result.data;
+    sellingSummary = `Selling lists — active: ${lists.active.length}, sold (last 60 days): ${lists.sold.length}, ended unsold (last 60 days): ${lists.endedUnsold.length}.`;
+    if (!complete) {
+      sellingWarning = `Some listings were not loaded. eBay reports ${totals.active} active, ${totals.sold} sold and ${totals.endedUnsold} ended unsold.`;
     }
+  } else if (result.status === "reconnect_required") {
+    sellingError =
+      "Your eBay connection has expired and couldn't be renewed automatically. Click Reconnect below.";
+  } else if (result.status === "error") {
+    sellingError = `Selling lists check failed: ${result.message}`;
   }
+
+  // Only show short codes that we made ourselves.
+  const errorCode =
+    params.ebay_error && /^[a-z_]{1,40}$/.test(params.ebay_error)
+      ? params.ebay_error
+      : null;
+  const tokenUntil = formatTime(connection?.token_expires_at ?? null);
 
   return (
     <main className="mx-auto max-w-2xl px-6 py-16">
@@ -69,8 +93,21 @@ export default async function SettingsPage({
       )}
       {params.ebay_error && (
         <p className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
-          Something went wrong connecting your eBay account (
-          {params.ebay_error}). Try again below.
+          Something went wrong connecting your eBay account
+          {errorCode ? ` (${errorCode})` : ""}. Try again below.
+        </p>
+      )}
+      {params.refreshed === "1" && (
+        <p className="mb-4 rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">
+          Token renewed. It now lasts about 2 hours, and RevitaSync renews it
+          again by itself.
+        </p>
+      )}
+      {params.refresh_error && (
+        <p className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+          {params.refresh_error === "reconnect_required"
+            ? "eBay no longer accepts the saved sign-in. Click Reconnect below."
+            : "Couldn't renew the token right now. Try again in a minute."}
         </p>
       )}
 
@@ -83,7 +120,11 @@ export default async function SettingsPage({
           <>
             <p className="text-sm text-green-700">
               ✓ Connected since{" "}
-              {new Date(connection.connected_at).toLocaleString()}
+              {formatTime(connection.connected_at) ?? "earlier"}
+            </p>
+            <p className="mt-1 text-xs text-gray-500">
+              The access token renews automatically
+              {tokenUntil ? `. Current token valid until ${tokenUntil}.` : "."}
             </p>
             {sellingSummary && (
               <p className="mt-2 text-sm text-gray-600">{sellingSummary}</p>
@@ -100,13 +141,22 @@ export default async function SettingsPage({
             >
               View your listings →
             </Link>
-            <br />
-            <a
-              href={getEbayAuthorizeUrl()}
-              className="mt-4 inline-block text-sm text-gray-500 underline underline-offset-2"
-            >
-              Reconnect
-            </a>
+            <div className="mt-4 flex flex-wrap items-center gap-4">
+              <form action={refreshTokenNow}>
+                <button
+                  type="submit"
+                  className="rounded-md border border-gray-300 px-3 py-1 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  Test token renewal
+                </button>
+              </form>
+              <a
+                href={getEbayAuthorizeUrl()}
+                className="text-sm text-gray-500 underline underline-offset-2"
+              >
+                Reconnect
+              </a>
+            </div>
           </>
         ) : (
           <>

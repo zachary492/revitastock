@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getEbayAuthorizeUrl } from "@/lib/ebay/oauth";
-import { fetchAllSellingLists } from "@/lib/ebay/sellingFetch";
+import { loadSellingListsForUser } from "@/lib/ebay/connection";
 import type { ListingRecord } from "@/lib/ebay/sellingLists";
 import {
   groupUnlabeled,
@@ -176,11 +176,8 @@ export default async function NeedsLabelPage() {
     redirect("/auth");
   }
 
-  const { data: connection } = await supabase
-    .from("ebay_connections")
-    .select("access_token")
-    .eq("user_id", user.id)
-    .maybeSingle();
+  const result = await loadSellingListsForUser(supabase, user.id);
+  const connection = result.status !== "not_connected";
 
   // Saved answers. If the database step hasn't been done yet, this fails and
   // the page still works, it just can't save answers.
@@ -199,35 +196,30 @@ export default async function NeedsLabelPage() {
   let warning: string | null = null;
   let error: string | null = null;
 
-  if (connection) {
-    try {
-      const { lists, totals, complete } = await fetchAllSellingLists(
-        connection.access_token
-      );
-      const everyListing = [
-        ...lists.active,
-        ...lists.endedUnsold,
-        ...lists.sold,
-      ];
-      const withAnswers = applyLabelLinks(lists, links);
-      groups = groupUnlabeled(
-        [...withAnswers.active, ...withAnswers.endedUnsold, ...withAnswers.sold],
-        { isolated: rejectedItemIds(links) }
-      );
-      answered = links.map((link) => ({
-        link,
-        listing: everyListing.find((r) => r.itemId === link.itemId),
-      }));
-      if (!complete) {
-        warning = `Some listings were not loaded. eBay reports ${totals.active} active, ${totals.sold} sold and ${totals.endedUnsold} ended unsold.`;
-      }
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Couldn't read your listings.";
-      error = /932|expired/i.test(message)
-        ? "Your eBay connection has expired. Reconnect to load your listings."
-        : `Couldn't load your listings: ${message}`;
+  if (result.status === "ok") {
+    const { lists, totals, complete } = result.data;
+    const everyListing = [
+      ...lists.active,
+      ...lists.endedUnsold,
+      ...lists.sold,
+    ];
+    const withAnswers = applyLabelLinks(lists, links);
+    groups = groupUnlabeled(
+      [...withAnswers.active, ...withAnswers.endedUnsold, ...withAnswers.sold],
+      { isolated: rejectedItemIds(links) }
+    );
+    answered = links.map((link) => ({
+      link,
+      listing: everyListing.find((r) => r.itemId === link.itemId),
+    }));
+    if (!complete) {
+      warning = `Some listings were not loaded. eBay reports ${totals.active} active, ${totals.sold} sold and ${totals.endedUnsold} ended unsold.`;
     }
+  } else if (result.status === "reconnect_required") {
+    error =
+      "Your eBay connection has expired and couldn't be renewed automatically. Reconnect to load your listings.";
+  } else if (result.status === "error") {
+    error = `Couldn't load your listings: ${result.message}`;
   }
 
   const matches = groups.filter((g) => g.kind === "matches_label");

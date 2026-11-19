@@ -1,21 +1,27 @@
-const EBAY_AUTH_BASE =
-process.env.EBAY_ENV?.trim().toLowerCase() === "production"
+function isProduction(): boolean {
+  return process.env.EBAY_ENV?.trim().toLowerCase() === "production";
+}
+
+export function getEbayAuthBase(): string {
+  return isProduction()
     ? "https://auth.ebay.com"
     : "https://auth.sandbox.ebay.com";
+}
 
-const EBAY_API_BASE =
-  process.env.EBAY_ENV === "production"
+export function getEbayApiBase(): string {
+  return isProduction()
     ? "https://api.ebay.com"
     : "https://api.sandbox.ebay.com";
+}
 
-// Minimal scope for now — just enough to read/write inventory items.
-// Add more scopes here later as features need them (e.g. fulfillment
-// for sold-orders tracking).
-const SCOPES = ["https://api.ebay.com/oauth/api_scope/sell.inventory"];
+// Minimal scope for now. Add more scopes here later as features need them
+// (e.g. fulfillment for sold-orders tracking). Refreshing a token must use
+// the same scopes (or fewer) as the original consent.
+export const EBAY_SCOPES = ["https://api.ebay.com/oauth/api_scope/sell.inventory"];
 
 /**
  * Builds the URL to send a seller to, to start connecting their eBay
- * account. eBay does NOT accept a raw callback URL here — it uses a
+ * account. eBay does NOT accept a raw callback URL here. It uses a
  * "RuName" (configured in the eBay Developer Portal under
  * Application Keys > User Tokens), which eBay resolves to the real
  * Auth Accepted URL on their end.
@@ -25,10 +31,10 @@ export function getEbayAuthorizeUrl(): string {
     client_id: process.env.EBAY_CLIENT_ID!.trim(),
     redirect_uri: process.env.EBAY_RUNAME!.trim(), // yes, the RuName, not a URL
     response_type: "code",
-    scope: SCOPES.join(" "),
+    scope: EBAY_SCOPES.join(" "),
   });
 
-  return `${EBAY_AUTH_BASE}/oauth2/authorize?${params.toString()}`;
+  return `${getEbayAuthBase()}/oauth2/authorize?${params.toString()}`;
 }
 
 export interface EbayTokenResponse {
@@ -45,10 +51,10 @@ export async function exchangeCodeForTokens(
   code: string
 ): Promise<EbayTokenResponse> {
   const basicAuth = Buffer.from(
-`${process.env.EBAY_CLIENT_ID!.trim()}:${process.env.EBAY_CLIENT_SECRET!.trim()}`
+    `${process.env.EBAY_CLIENT_ID!.trim()}:${process.env.EBAY_CLIENT_SECRET!.trim()}`
   ).toString("base64");
 
-  const res = await fetch(`${EBAY_API_BASE}/identity/v1/oauth2/token`, {
+  const res = await fetch(`${getEbayApiBase()}/identity/v1/oauth2/token`, {
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",

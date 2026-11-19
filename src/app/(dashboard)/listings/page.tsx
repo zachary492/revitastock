@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getEbayAuthorizeUrl } from "@/lib/ebay/oauth";
-import { fetchAllSellingLists } from "@/lib/ebay/sellingFetch";
+import { loadSellingListsForUser } from "@/lib/ebay/connection";
 import { groupUnlabeled } from "@/lib/listings/needsLabel";
 import {
   filterListings,
@@ -61,32 +61,24 @@ export default async function ListingsPage({
     redirect("/auth");
   }
 
-  const { data: connection } = await supabase
-    .from("ebay_connections")
-    .select("access_token")
-    .eq("user_id", user.id)
-    .maybeSingle();
+  const result = await loadSellingListsForUser(supabase, user.id);
+  const connection = result.status !== "not_connected";
 
   let rows: ListingRow[] = [];
   let warning: string | null = null;
   let error: string | null = null;
 
-  if (connection) {
-    try {
-      const { lists, totals, complete } = await fetchAllSellingLists(
-        connection.access_token
-      );
-      rows = organizeListings(lists);
-      if (!complete) {
-        warning = `Some listings were not loaded. eBay reports ${totals.active} active, ${totals.sold} sold and ${totals.endedUnsold} ended unsold.`;
-      }
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Couldn't read your listings.";
-      error = /932|expired/i.test(message)
-        ? "Your eBay connection has expired. Reconnect to load your listings."
-        : `Couldn't load your listings: ${message}`;
+  if (result.status === "ok") {
+    const { lists, totals, complete } = result.data;
+    rows = organizeListings(lists);
+    if (!complete) {
+      warning = `Some listings were not loaded. eBay reports ${totals.active} active, ${totals.sold} sold and ${totals.endedUnsold} ended unsold.`;
     }
+  } else if (result.status === "reconnect_required") {
+    error =
+      "Your eBay connection has expired and couldn't be renewed automatically. Reconnect to load your listings.";
+  } else if (result.status === "error") {
+    error = `Couldn't load your listings: ${result.message}`;
   }
 
   const summary = summarize(rows);
@@ -205,8 +197,11 @@ export default async function ListingsPage({
                       <td className="py-2 pr-3 font-mono">
                         {row.sku ?? <span className="text-gray-400">—</span>}
                         {row.sameLabelCount > 1 && (
-                          <span className="ml-1 text-xs text-amber-700">
-                            ×{row.sameLabelCount}
+                          <span
+                            className="ml-1 text-xs text-amber-700"
+                            title="This label is on more than one listing (for example a relist)."
+                          >
+                            {row.sameLabelCount} listings
                           </span>
                         )}
                       </td>

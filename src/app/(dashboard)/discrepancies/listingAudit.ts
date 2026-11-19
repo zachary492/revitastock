@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { fetchAllSellingLists } from "@/lib/ebay/sellingFetch";
+import { loadSellingListsForUser } from "@/lib/ebay/connection";
 import { applyLabelLinks, type LabelLink } from "@/lib/listings/labelLinks";
 import { runListingRules } from "@/lib/audit/listingRules";
 import { findingToRow, LISTING_RULE_TYPES } from "@/lib/audit/findingRows";
@@ -26,32 +26,28 @@ export async function runListingAudit(): Promise<ListingAuditResult> {
     return { success: false, error: "Not signed in." };
   }
 
-  const { data: connection } = await supabase
-    .from("ebay_connections")
-    .select("access_token")
-    .eq("user_id", user.id)
-    .maybeSingle();
+  const loaded = await loadSellingListsForUser(supabase, user.id);
 
-  if (!connection) {
+  if (loaded.status === "not_connected") {
     return {
       success: false,
       error: "Your eBay account isn't connected yet. Connect it in Settings.",
     };
   }
-
-  let fetched;
-  try {
-    fetched = await fetchAllSellingLists(connection.access_token);
-  } catch (err) {
-    const message =
-      err instanceof Error ? err.message : "Couldn't read your listings.";
+  if (loaded.status === "reconnect_required") {
     return {
       success: false,
-      error: /932|expired/i.test(message)
-        ? "Your eBay connection has expired. Reconnect in Settings, then run the audit again."
-        : `Couldn't load your listings: ${message}`,
+      error:
+        "Your eBay connection has expired and couldn't be renewed automatically. Reconnect in Settings, then run the audit again.",
     };
   }
+  if (loaded.status === "error") {
+    return {
+      success: false,
+      error: `Couldn't load your listings: ${loaded.message}`,
+    };
+  }
+  const fetched = loaded.data;
 
   // A partial list would create false alarms, so stop instead.
   if (!fetched.complete) {
