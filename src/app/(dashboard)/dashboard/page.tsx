@@ -38,6 +38,12 @@ export default async function DashboardPage() {
         Your listings
       </a>
       <a
+        href="/discrepancies"
+        className="ml-3 mt-6 inline-block rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+      >
+        Needs attention
+      </a>
+      <a
         href="/settings"
         className="ml-3 mt-6 inline-block rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
       >

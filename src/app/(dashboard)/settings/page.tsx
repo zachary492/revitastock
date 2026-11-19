@@ -141,6 +141,13 @@ export default async function SettingsPage({
             >
               View your listings →
             </Link>
+            <br />
+            <Link
+              href="/settings/label-test"
+              className="mt-1 inline-block text-sm text-gray-500 underline underline-offset-2"
+            >
+              Label write test (advanced)
+            </Link>
             <div className="mt-4 flex flex-wrap items-center gap-4">
               <form action={refreshTokenNow}>
                 <button
