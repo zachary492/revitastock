@@ -61,16 +61,24 @@ export default async function ListingsPage({
     redirect("/auth");
   }
 
-  const result = await loadSellingListsForUser(supabase, user.id);
+  const result = await loadSellingListsForUser(supabase, user.id, {
+    useHistory: true,
+  });
   const connection = result.status !== "not_connected";
 
   let rows: ListingRow[] = [];
   let warning: string | null = null;
+  let fromHistory = 0;
+  let historyNote: string | null = null;
   let error: string | null = null;
 
   if (result.status === "ok") {
     const { lists, totals, complete } = result.data;
     rows = organizeListings(lists);
+    fromHistory = result.data.fromHistory ?? 0;
+    if (result.data.historyWarning) {
+      historyNote = `Your saved history couldn't be updated right now (${result.data.historyWarning}). Showing what eBay reports.`;
+    }
     if (!complete) {
       warning = `Some listings were not loaded. eBay reports ${totals.active} active, ${totals.sold} sold and ${totals.endedUnsold} ended unsold.`;
     }
@@ -95,9 +103,21 @@ export default async function ListingsPage({
       </Link>
       <h1 className="mb-1 text-2xl font-semibold tracking-tight">Your listings</h1>
       <p className="mb-6 text-sm text-gray-600">
-        Everything eBay reports for your account: active listings, plus sold and
-        ended items from the last 60 days.
+        Your active listings, plus sold and ended items. eBay only reports the
+        last 60 days, so RevitaSync saves each sold and ended item it sees and
+        keeps it from then on.
       </p>
+      {fromHistory > 0 && (
+        <p className="mb-4 text-sm text-gray-500">
+          Includes {fromHistory} older {fromHistory === 1 ? "item" : "items"} from
+          your saved history that eBay no longer reports.
+        </p>
+      )}
+      {historyNote && (
+        <p className="mb-4 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          {historyNote}
+        </p>
+      )}
 
       {!connection && (
         <p className="text-sm text-gray-600">

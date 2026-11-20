@@ -26,7 +26,9 @@ export async function runListingAudit(): Promise<ListingAuditResult> {
     return { success: false, error: "Not signed in." };
   }
 
-  const loaded = await loadSellingListsForUser(supabase, user.id);
+  const loaded = await loadSellingListsForUser(supabase, user.id, {
+    useHistory: true,
+  });
 
   if (loaded.status === "not_connected") {
     return {

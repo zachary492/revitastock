@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { EBAY_SCOPES, getEbayApiBase } from "./oauth";
 import { fetchAllSellingLists } from "./sellingFetch";
+import { syncListingHistory } from "../listings/historyStore";
 import {
   ReconnectRequiredError,
   isExpired,
@@ -76,8 +77,14 @@ export async function getValidAccessToken(
   }
 }
 
+export type SellingFetchData = Awaited<ReturnType<typeof fetchAllSellingLists>> & {
+  /** Sold/ended items that only our saved history still knows about. */
+  fromHistory?: number;
+  historyWarning?: string;
+};
+
 export type SellingListsResult =
-  | { status: "ok"; data: Awaited<ReturnType<typeof fetchAllSellingLists>> }
+  | { status: "ok"; data: SellingFetchData }
   | { status: "not_connected" }
   | { status: "reconnect_required"; message: string }
   | { status: "error"; message: string };
@@ -87,6 +94,28 @@ export type SellingListsResult =
  * needed, and if eBay still says the token expired, renews once and retries.
  */
 export async function loadSellingListsForUser(
+  supabase: SupabaseClient,
+  userId: string,
+  options: { useHistory?: boolean } = {}
+): Promise<SellingListsResult> {
+  const result = await loadFromEbay(supabase, userId);
+  if (result.status !== "ok" || !options.useHistory) return result;
+
+  // Only save and merge a COMPLETE load, so a partial one can't hide anything.
+  if (!result.data.complete) return result;
+  const outcome = await syncListingHistory(supabase, userId, result.data.lists);
+  return {
+    status: "ok",
+    data: {
+      ...result.data,
+      lists: outcome.lists,
+      fromHistory: outcome.fromHistory,
+      historyWarning: outcome.warning,
+    },
+  };
+}
+
+async function loadFromEbay(
   supabase: SupabaseClient,
   userId: string
 ): Promise<SellingListsResult> {
