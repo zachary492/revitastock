@@ -12,3 +12,7 @@ npm-debug.log*
 next-env.d.ts
 supabase/.branches
 supabase/.temp
+
+# Delivery zips and tools (never commit)
+*.zip
+ngrok.exe

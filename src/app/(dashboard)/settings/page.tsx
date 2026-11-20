@@ -44,7 +44,7 @@ export default async function SettingsPage({
 
   const { data: connection } = await supabase
     .from("ebay_connections")
-    .select("connected_at, token_expires_at")
+    .select("connected_at, token_expires_at, last_sync_at, last_sync_status, last_sync_message")
     .eq("user_id", user.id)
     .maybeSingle();
 
@@ -71,6 +71,7 @@ export default async function SettingsPage({
       ? params.ebay_error
       : null;
   const tokenUntil = formatTime(connection?.token_expires_at ?? null);
+  const lastSync = formatTime(connection?.last_sync_at ?? null);
 
   return (
     <main className="mx-auto max-w-2xl px-6 py-16">
@@ -125,6 +126,19 @@ export default async function SettingsPage({
             <p className="mt-1 text-xs text-gray-500">
               The access token renews automatically
               {tokenUntil ? `. Current token valid until ${tokenUntil}.` : "."}
+            </p>
+            <p className="mt-1 text-xs text-gray-500">
+              {lastSync
+                ? `Last automatic daily sync: ${lastSync}${
+                    connection.last_sync_status === "ok"
+                      ? "."
+                      : connection.last_sync_status === "reconnect_required"
+                        ? " (needs you to Reconnect eBay)."
+                        : connection.last_sync_status
+                          ? ` (problem: ${connection.last_sync_message ?? "see logs"}).`
+                          : "."
+                  }`
+                : "The automatic daily sync hasn't run yet."}
             </p>
             {sellingSummary && (
               <p className="mt-2 text-sm text-gray-600">{sellingSummary}</p>
