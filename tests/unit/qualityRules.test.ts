@@ -84,3 +84,28 @@ describe("findQualityIssues", () => {
     expect(issues[2]?.label).toBeNull();
   });
 });
+
+describe("size split across Size and Size Type", () => {
+  const base = { itemId: "1", descriptionLength: 200, pictureCount: 6 };
+  const spec = (size: string, type?: string) => [
+    { name: "Brand", values: ["X"] }, { name: "Color", values: ["Navy"] },
+    { name: "Size", values: [size] },
+    ...(type ? [{ name: "Size Type", values: [type] }] : []),
+  ];
+  it("flags 46R in the title against Size 44 + Regular", () => {
+    const p = qualityProblems({ ...base, title: "Wool Blazer 46R", specifics: spec("44", "Regular") });
+    expect(p.join(" ")).toMatch(/46R.*44R/);
+  });
+  it("flags the length when only that differs", () => {
+    const p = qualityProblems({ ...base, title: "Wool Blazer 44L", specifics: spec("44", "Regular") });
+    expect(p.join(" ")).toMatch(/44L.*44R/);
+  });
+  it("flags a bare chest number that differs when no type is given", () => {
+    const p = qualityProblems({ ...base, title: "Wool Blazer 46R", specifics: spec("44") });
+    expect(p.join(" ")).toMatch(/46R.*44/);
+  });
+  it("is quiet when they agree", () => {
+    expect(qualityProblems({ ...base, title: "Wool Blazer 44R", specifics: spec("44", "Regular") })).toEqual([]);
+    expect(qualityProblems({ ...base, title: "Wool Blazer 44R", specifics: spec("44") })).toEqual([]);
+  });
+});

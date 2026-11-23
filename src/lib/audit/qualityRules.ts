@@ -1,6 +1,6 @@
 import type { ListingRecord } from "../ebay/sellingLists";
 import type { ItemDetails } from "../ebay/itemDetails";
-import { findSizeConflict } from "../listings/sizes";
+import { findSizeConflict, joinChestAndLength } from "../listings/sizes";
 import { normalizeLabel } from "../listings/organize";
 
 /** Starting thresholds. Plain numbers so they are easy to change. */
@@ -24,9 +24,12 @@ export function qualityProblems(details: ItemDetails): string[] {
   const problems: string[] = [];
 
   // Size in the title vs the Size item specifics
-  const sizeValues = details.specifics
-    .filter((s) => /size/i.test(s.name) && !/type/i.test(s.name))
-    .flatMap((s) => s.values);
+  const sizeValues = joinChestAndLength(
+    details.specifics
+      .filter((s) => /size/i.test(s.name) && !/type/i.test(s.name))
+      .flatMap((s) => s.values),
+    details.specifics.filter((s) => /size.*type|^type$/i.test(s.name)).flatMap((s) => s.values)
+  );
   const conflict = findSizeConflict(details.title, sizeValues);
   if (conflict) {
     problems.push(

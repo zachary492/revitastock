@@ -96,6 +96,35 @@ export function sizesInValues(values: string[]): Sizes {
   return { letters, jackets };
 }
 
+const LENGTH_WORDS: [RegExp, string][] = [
+  [/^(R|REG|REGULAR)$/, "R"],
+  [/^(L|LONG)$/, "L"],
+  [/^(S|SHORT)$/, "S"],
+];
+
+/**
+ * eBay often splits a jacket size into "Size: 44" and "Size Type: Regular".
+ * This joins them into "44R" so they can be compared with a title's "44R".
+ * A bare chest number with no usable length is left as "44".
+ */
+export function joinChestAndLength(sizeValues: string[], typeValues: string[]): string[] {
+  const lengths = new Set<string>();
+  for (const t of typeValues) {
+    const word = t.trim().toUpperCase();
+    for (const [re, letter] of LENGTH_WORDS) if (re.test(word)) lengths.add(letter);
+  }
+  const out: string[] = [];
+  for (const v of sizeValues) {
+    const m = /^\s*(\d{2})\s*$/.exec(v);
+    if (m && plausibleChest(m[1]) && lengths.size === 1) {
+      out.push(`${m[1]}${[...lengths][0]}`);
+    } else {
+      out.push(v);
+    }
+  }
+  return out;
+}
+
 export interface SizeConflict {
   titleSize: string;
   specificsSize: string;
@@ -139,6 +168,22 @@ export function findSizeConflict(
       titleSize: [...inTitle.letters].join("/"),
       specificsSize: [...inSpecifics.letters].join("/"),
     };
+  }
+  // Bare chest numbers in the specifics ("44" with no length): compare the
+  // chest part only against the title's jacket sizes.
+  if (inTitle.jackets.size > 0 && inSpecifics.jackets.size === 0) {
+    const bare = new Set<string>();
+    for (const v of specificValues) {
+      const m = /^\s*(\d{2})\s*$/.exec(v);
+      if (m && plausibleChest(m[1])) bare.add(m[1] as string);
+    }
+    const titleChests = new Set([...inTitle.jackets].map((j) => j.slice(0, 2)));
+    if (bare.size > 0 && !overlap(titleChests, bare)) {
+      return {
+        titleSize: [...inTitle.jackets].join("/"),
+        specificsSize: [...bare].join("/"),
+      };
+    }
   }
   return null;
 }
