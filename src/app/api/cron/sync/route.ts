@@ -48,7 +48,8 @@ export async function GET(request: Request) {
           message: `${result.listingsChecked} listings checked; ${
             (result.soldButStillActive ?? 0) +
             (result.endedNeverRelisted ?? 0) +
-            (result.staleListings ?? 0)
+            (result.staleListings ?? 0) +
+            (result.listingQuality ?? 0)
           } need attention.`,
         };
       }

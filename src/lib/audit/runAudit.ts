@@ -1,5 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { loadSellingListsForUser } from "@/lib/ebay/connection";
+import { getValidAccessToken, loadSellingListsForUser } from "@/lib/ebay/connection";
+import { refreshListingDetails } from "@/lib/listings/detailStore";
+import { findQualityIssues, type QualityIssue } from "@/lib/audit/qualityRules";
 import { applyLabelLinks, type LabelLink } from "@/lib/listings/labelLinks";
 import { runListingRules } from "@/lib/audit/listingRules";
 import { findingToRow, LISTING_RULE_TYPES } from "@/lib/audit/findingRows";
@@ -13,6 +15,12 @@ export interface ListingAuditResult {
   soldButStillActive?: number;
   endedNeverRelisted?: number;
   staleListings?: number;
+  listingQuality?: number;
+  /** Live listings whose content was checked, out of all live listings. */
+  detailsChecked?: number;
+  detailsTotal?: number;
+  /** Set when listing content couldn't be checked this time. */
+  detailsNote?: string;
 }
 
 /**
@@ -76,7 +84,32 @@ export async function runListingAuditForUser(
   }));
 
   const lists = applyLabelLinks(fetched.lists, links);
-  const findings = runListingRules(lists, { watchStates: fetched.watchStates });
+  // Listing content (item specifics, photos, description): read a limited
+  // batch from eBay each run, so a big shop is covered over a few runs.
+  let qualityIssues: QualityIssue[] = [];
+  let detailsChecked = 0;
+  let detailsNote: string | undefined;
+  const token = await getValidAccessToken(supabase, userId);
+  if (token.ok) {
+    const refreshed = await refreshListingDetails({
+      supabase,
+      userId,
+      accessToken: token.accessToken,
+      active: lists.active,
+    });
+    qualityIssues = findQualityIssues(lists.active, refreshed.details);
+    detailsChecked = lists.active.filter((r) => refreshed.details.has(r.itemId)).length;
+    if (refreshed.warning) detailsNote = refreshed.warning;
+    else if (refreshed.tokenExpired) detailsNote = "eBay asked for a fresh sign-in partway through; the rest will be checked next time.";
+    else if (refreshed.failed > 0) detailsNote = `${refreshed.failed} listing${refreshed.failed === 1 ? "" : "s"} couldn't be read from eBay this time.`;
+  } else {
+    detailsNote = "Listing content wasn't checked because the eBay connection needs attention.";
+  }
+
+  const findings = [
+    ...runListingRules(lists, { watchStates: fetched.watchStates }),
+    ...qualityIssues,
+  ];
 
   // Replace the previous open results of these two types only.
   const { error: deleteError } = await supabase
@@ -130,5 +163,10 @@ export async function runListingAuditForUser(
     ).length,
     staleListings: visibleFindings.filter((r) => r.type === "stale_listing")
       .length,
+    listingQuality: visibleFindings.filter((r) => r.type === "listing_quality")
+      .length,
+    detailsChecked,
+    detailsTotal: lists.active.length,
+    detailsNote,
   };
 }

@@ -130,13 +130,13 @@ describe("summaries and dismissals", () => {
         { type: "ended_never_relisted" },
         { type: "ghost_listing" },
       ])
-    ).toEqual({ total: 3, soldButStillActive: 2, endedNeverRelisted: 1, staleListings: 0 });
+    ).toEqual({ total: 3, soldButStillActive: 2, endedNeverRelisted: 1, staleListings: 0, listingQuality: 0 });
   });
 
   it("counts stale listings in the total", () => {
     expect(
       summarizeFindings([{ type: "stale_listing" }, { type: "sold_but_still_active" }])
-    ).toEqual({ total: 2, soldButStillActive: 1, endedNeverRelisted: 0, staleListings: 1 });
+    ).toEqual({ total: 2, soldButStillActive: 1, endedNeverRelisted: 0, staleListings: 1, listingQuality: 0 });
   });
 
   it("explains a stale listing", () => {
@@ -156,6 +156,22 @@ describe("summaries and dismissals", () => {
       details: { title: "T", listedDays: 95, lastWatchedAt: "2026-07-01T12:00:00Z" },
     });
     expect(seen?.text).toContain("last time RevitaSync saw a watcher on it was Jul 1, 2026");
+  });
+
+  it("explains a listing-quality finding with all its problems", () => {
+    const e = explainFinding({
+      type: "listing_quality",
+      sku: "BLA-001",
+      listing_id: "1",
+      details: { title: "Blazer 46R", problems: ["The description is empty.", "It has only 1 photo (RevitaSync suggests at least 3)."] },
+    });
+    expect(e?.heading).toBe("Listing may need a fix");
+    expect(e?.text).toContain('"Blazer 46R"');
+    expect(e?.text).toContain("The description is empty. It has only 1 photo");
+    expect(
+      summarizeFindings([{ type: "listing_quality" }, { type: "listing_quality" }]).listingQuality
+    ).toBe(2);
+    expect(isListingRuleType("listing_quality")).toBe(true);
   });
 
   it("knows which types are listing checks", () => {

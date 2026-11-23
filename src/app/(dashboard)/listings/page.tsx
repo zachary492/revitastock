@@ -41,7 +41,9 @@ function formatDate(value: string | null): string {
 function dateFor(row: ListingRow): string {
   if (row.status === "sold") return `Sold ${formatDate(row.soldAt)}`;
   if (row.status === "ended_unsold") return `Ended ${formatDate(row.endTime)}`;
-  return row.endTime ? `Ends ${formatDate(row.endTime)}` : "Until cancelled";
+  return row.endTime
+    ? `Ends ${formatDate(row.endTime)}`
+    : `Listed ${formatDate(row.startTime)}`;
 }
 
 export default async function ListingsPage({

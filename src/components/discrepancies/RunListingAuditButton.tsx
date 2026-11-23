@@ -45,7 +45,20 @@ export default function RunListingAuditButton() {
             <li>Sold, but a listing is still live: {result.soldButStillActive}</li>
             <li>Ended without selling, not relisted: {result.endedNeverRelisted}</li>
             <li>No watchers for a long time: {result.staleListings}</li>
+            <li>Listings that may need a fix: {result.listingQuality}</li>
           </ul>
+          {result.detailsTotal !== undefined && result.detailsTotal > 0 && (
+            <p className="mt-2 text-xs">
+              Listing content checked for {result.detailsChecked} of {result.detailsTotal} live
+              listings
+              {result.detailsChecked !== result.detailsTotal
+                ? ". The rest are checked a few at a time on later runs."
+                : "."}
+            </p>
+          )}
+          {result.detailsNote && (
+            <p className="mt-1 text-xs text-amber-700">{result.detailsNote}</p>
+          )}
         </div>
       )}
     </div>

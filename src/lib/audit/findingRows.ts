@@ -1,6 +1,8 @@
 import type { Finding } from "./listingRules";
+import type { QualityIssue } from "./qualityRules";
 
-export type ListingRuleType = Finding["rule"];
+export type AnyFinding = Finding | QualityIssue;
+export type ListingRuleType = AnyFinding["rule"];
 
 /** One row for the `discrepancies` table (the caller adds user_id). */
 export interface DiscrepancyRow {
@@ -19,9 +21,25 @@ export const LISTING_RULE_TYPES: ListingRuleType[] = [
   "sold_but_still_active",
   "ended_never_relisted",
   "stale_listing",
+  "listing_quality",
 ];
 
-export function findingToRow(finding: Finding): DiscrepancyRow {
+export function findingToRow(finding: AnyFinding): DiscrepancyRow {
+  if (finding.rule === "listing_quality") {
+    return {
+      sku: finding.label ?? NO_LABEL,
+      type: finding.rule,
+      physical_quantity: null,
+      live_quantity: finding.listing.quantityAvailable,
+      listing_id: finding.listing.itemId,
+      details: {
+        title: finding.listing.title,
+        price: finding.listing.price,
+        problems: finding.problems,
+      },
+    };
+  }
+
   if (finding.rule === "sold_but_still_active") {
     return {
       sku: finding.label,

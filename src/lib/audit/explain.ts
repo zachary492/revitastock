@@ -84,6 +84,21 @@ export function explainFinding(row: FindingRowData): Explanation | null {
     return { heading: "Ended without selling, not relisted", text };
   }
 
+  if (row.type === "listing_quality") {
+    const raw = row.details?.problems;
+    const problems = Array.isArray(raw)
+      ? raw.filter((p): p is string => typeof p === "string")
+      : [];
+    return {
+      heading: "Listing may need a fix",
+      text:
+        `${listing} has ${problems.length === 1 ? "something" : "a few things"} worth fixing, ` +
+        "because buyers and eBay's search both pay attention to them. " +
+        problems.join(" ") +
+        " Open it on eBay to fix it, or dismiss this if it's fine as it is.",
+    };
+  }
+
   if (row.type === "stale_listing") {
     const days = row.details?.listedDays;
     const lastWatched = formatDay(row.details?.lastWatchedAt);
@@ -110,6 +125,7 @@ export interface FindingSummary {
   soldButStillActive: number;
   endedNeverRelisted: number;
   staleListings: number;
+  listingQuality: number;
 }
 
 export function summarizeFindings(rows: { type: string }[]): FindingSummary {
@@ -120,11 +136,13 @@ export function summarizeFindings(rows: { type: string }[]): FindingSummary {
     (r) => r.type === "ended_never_relisted"
   ).length;
   const staleListings = rows.filter((r) => r.type === "stale_listing").length;
+  const listingQuality = rows.filter((r) => r.type === "listing_quality").length;
   return {
-    total: soldButStillActive + endedNeverRelisted + staleListings,
+    total: soldButStillActive + endedNeverRelisted + staleListings + listingQuality,
     soldButStillActive,
     endedNeverRelisted,
     staleListings,
+    listingQuality,
   };
 }
 

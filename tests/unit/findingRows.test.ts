@@ -73,3 +73,23 @@ describe("findingToRow", () => {
     });
   });
 });
+
+describe("findingToRow for listing quality", () => {
+  it("builds a row with the problems, using a placeholder when unlabeled", async () => {
+    const { findingToRow } = await import("../../src/lib/audit/findingRows");
+    const row = findingToRow({
+      rule: "listing_quality",
+      label: null,
+      listing: {
+        itemId: "100000000001", title: "Blazer", sku: null, status: "active", listingType: "FixedPriceItem",
+        quantityAvailable: 1, quantitySold: 0, price: 20, startTime: null, endTime: null,
+        relisted: false, soldAt: null, paid: null,
+      },
+      problems: ["The description is empty."],
+    });
+    expect(row.sku).toBe("(no label)");
+    expect(row.type).toBe("listing_quality");
+    expect(row.listing_id).toBe("100000000001");
+    expect(row.details).toMatchObject({ title: "Blazer", problems: ["The description is empty."] });
+  });
+});

@@ -45,6 +45,9 @@ function SummaryCard({
   );
 }
 
+// The audit also reads listing details from eBay, so allow it a little longer.
+export const maxDuration = 60;
+
 export default async function DiscrepanciesPage() {
   const supabase = await createClient();
 
@@ -92,7 +95,7 @@ export default async function DiscrepanciesPage() {
 
       <RunListingAuditButton />
 
-      <div className="mb-10 mt-8 grid gap-3 sm:grid-cols-4">
+      <div className="mb-10 mt-8 grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <SummaryCard
           label="Needs attention"
           value={summary.total}
@@ -117,6 +120,11 @@ export default async function DiscrepanciesPage() {
           label="No watchers"
           value={summary.staleListings}
           note="Live 90+ days, no interest"
+        />
+        <SummaryCard
+          label="Listing quality"
+          value={summary.listingQuality}
+          note="Photos, details, size"
         />
       </div>
 
