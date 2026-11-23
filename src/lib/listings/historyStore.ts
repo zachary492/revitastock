@@ -1,5 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ListingRecord, SellingLists } from "../ebay/sellingLists";
+import { loadWatchStates, saveWatchStates } from "./watchStore";
+import { nextWatchStates, type WatchState } from "./watchState";
 import {
   fromSavedRow,
   historyRecords,
@@ -58,33 +60,56 @@ export interface HistoryOutcome {
   lists: SellingLists;
   /** How many sold/ended items came only from our saved copy. */
   fromHistory: number;
-  /** Set when saving or reading failed; the lists are then eBay-only. */
+  /** What we remember about each live listing's watchers (undefined if unavailable). */
+  watchStates?: Map<string, WatchState>;
+  /** Set when saving or reading failed; the data is then eBay-only. */
   warning?: string;
 }
 
 /**
  * Saves what eBay reports now, then adds anything older that we saved before.
+ * Also updates the watcher memory for live listings.
  * Never throws: if the database step fails, the seller still gets eBay's data.
  */
 export async function syncListingHistory(
   supabase: SupabaseClient,
   userId: string,
-  current: SellingLists
+  current: SellingLists,
+  now: Date = new Date()
 ): Promise<HistoryOutcome> {
+  const warnings: string[] = [];
+
+  // Sold and ended history
+  let lists = current;
+  let fromHistory = 0;
   const saveResult = await saveListingHistory(supabase, userId, current);
+  if (saveResult.error) warnings.push(`Saving history failed: ${saveResult.error}`);
   const loaded = await loadListingHistory(supabase, userId);
   if (loaded.error) {
-    return {
-      lists: current,
-      fromHistory: 0,
-      warning: `Saved history couldn't be read: ${loaded.error}`,
-    };
+    warnings.push(`Saved history couldn't be read: ${loaded.error}`);
+  } else {
+    const merged = mergeHistory(current, loaded.records);
+    lists = merged.lists;
+    fromHistory = merged.fromHistory;
   }
-  const merged = mergeHistory(current, loaded.records);
+
+  // Watchers on live listings
+  let watchStates: Map<string, WatchState> | undefined;
+  const watchLoaded = await loadWatchStates(supabase, userId);
+  if (watchLoaded.error) {
+    warnings.push(`Watcher history couldn't be read: ${watchLoaded.error}`);
+  } else {
+    const updated = nextWatchStates(watchLoaded.states, current.active, now);
+    const saved = await saveWatchStates(supabase, userId, updated);
+    if (saved.error) warnings.push(`Saving watcher history failed: ${saved.error}`);
+    watchStates = new Map(watchLoaded.states);
+    for (const state of updated) watchStates.set(state.itemId, state);
+  }
+
   return {
-    ...merged,
-    warning: saveResult.error
-      ? `Saving history failed: ${saveResult.error}`
-      : undefined,
+    lists,
+    fromHistory,
+    watchStates,
+    warning: warnings.length > 0 ? warnings.join(" ") : undefined,
   };
 }

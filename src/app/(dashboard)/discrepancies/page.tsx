@@ -82,8 +82,8 @@ export default async function DiscrepanciesPage() {
       <h1 className="mb-1 text-2xl font-semibold tracking-tight">Needs attention</h1>
       <p className="mb-8 text-sm text-gray-600">
         Checks your eBay listings for items that look wrong. These are things to
-        check, not errors: RevitaSync can&apos;t see everything. Items with no
-        label are skipped, so{" "}
+        check, not errors: RevitaSync can&apos;t see everything. The sold and ended
+        checks skip items with no label, so{" "}
         <Link href="/listings/needs-label" className="underline underline-offset-2">
           label them first
         </Link>{" "}
@@ -92,7 +92,7 @@ export default async function DiscrepanciesPage() {
 
       <RunListingAuditButton />
 
-      <div className="mb-10 mt-8 grid gap-3 sm:grid-cols-3">
+      <div className="mb-10 mt-8 grid gap-3 sm:grid-cols-4">
         <SummaryCard
           label="Needs attention"
           value={summary.total}
@@ -112,6 +112,11 @@ export default async function DiscrepanciesPage() {
           label="Ended, not relisted"
           value={summary.endedNeverRelisted}
           note="No sale, no live listing"
+        />
+        <SummaryCard
+          label="No watchers"
+          value={summary.staleListings}
+          note="Live 90+ days, no interest"
         />
       </div>
 

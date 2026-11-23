@@ -130,12 +130,38 @@ describe("summaries and dismissals", () => {
         { type: "ended_never_relisted" },
         { type: "ghost_listing" },
       ])
-    ).toEqual({ total: 3, soldButStillActive: 2, endedNeverRelisted: 1 });
+    ).toEqual({ total: 3, soldButStillActive: 2, endedNeverRelisted: 1, staleListings: 0 });
+  });
+
+  it("counts stale listings in the total", () => {
+    expect(
+      summarizeFindings([{ type: "stale_listing" }, { type: "sold_but_still_active" }])
+    ).toEqual({ total: 2, soldButStillActive: 1, endedNeverRelisted: 0, staleListings: 1 });
+  });
+
+  it("explains a stale listing", () => {
+    const e = explainFinding({
+      type: "stale_listing",
+      sku: "TIE-001",
+      listing_id: "1",
+      details: { title: "Blue Tie", listedDays: 120, lastWatchedAt: null, watchingSince: "2026-11-20T15:00:00Z" },
+    });
+    expect(e?.heading).toBe("No watchers for a long time");
+    expect(e?.text).toContain("120 days");
+    expect(e?.text).toContain("since it started checking on Nov 20, 2026");
+    const seen = explainFinding({
+      type: "stale_listing",
+      sku: "X",
+      listing_id: "1",
+      details: { title: "T", listedDays: 95, lastWatchedAt: "2026-07-01T12:00:00Z" },
+    });
+    expect(seen?.text).toContain("last time RevitaSync saw a watcher on it was Jul 1, 2026");
   });
 
   it("knows which types are listing checks", () => {
     expect(isListingRuleType("sold_but_still_active")).toBe(true);
     expect(isListingRuleType("ended_never_relisted")).toBe(true);
+    expect(isListingRuleType("stale_listing")).toBe(true);
     expect(isListingRuleType("ghost_listing")).toBe(false);
   });
 

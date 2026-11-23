@@ -12,6 +12,7 @@ export interface ListingAuditResult {
   listingsChecked?: number;
   soldButStillActive?: number;
   endedNeverRelisted?: number;
+  staleListings?: number;
 }
 
 /**
@@ -75,7 +76,7 @@ export async function runListingAuditForUser(
   }));
 
   const lists = applyLabelLinks(fetched.lists, links);
-  const findings = runListingRules(lists);
+  const findings = runListingRules(lists, { watchStates: fetched.watchStates });
 
   // Replace the previous open results of these two types only.
   const { error: deleteError } = await supabase
@@ -127,5 +128,7 @@ export async function runListingAuditForUser(
     endedNeverRelisted: visibleFindings.filter(
       (r) => r.type === "ended_never_relisted"
     ).length,
+    staleListings: visibleFindings.filter((r) => r.type === "stale_listing")
+      .length,
   };
 }

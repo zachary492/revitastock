@@ -48,7 +48,13 @@ describe("parseSellingLists (real response shape)", () => {
       relisted: false,
       soldAt: null,
       paid: null,
+      watchCount: 1,
     });
+  });
+
+  it("reads watcher counts, treating a missing tag as zero", () => {
+    expect(lists.active[0]?.watchCount).toBe(1);
+    expect(lists.active[1]?.watchCount).toBe(0);
   });
 
   it("reads sold items, including when the sale was made and whether it was paid", () => {

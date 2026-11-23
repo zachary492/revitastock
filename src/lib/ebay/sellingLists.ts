@@ -17,6 +17,8 @@ export interface ListingRecord {
   relisted: boolean; // eBay's own flag on an ended listing
   soldAt: string | null; // sold list only
   paid: boolean | null; // sold list only
+  /** People watching right now. eBay leaves the tag out when it is zero. */
+  watchCount?: number;
 }
 
 export interface SellingLists {
@@ -57,6 +59,7 @@ function parseItem(
     startTime: text(details, "StartTime"),
     endTime: text(details, "EndTime"),
     relisted: text(itemXml, "Relisted") === "true",
+    watchCount: num(text(itemXml, "WatchCount")) ?? 0,
     soldAt: null,
     paid: null,
   };

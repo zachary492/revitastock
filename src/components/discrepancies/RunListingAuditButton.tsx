@@ -44,6 +44,7 @@ export default function RunListingAuditButton() {
           <ul className="space-y-0.5">
             <li>Sold, but a listing is still live: {result.soldButStillActive}</li>
             <li>Ended without selling, not relisted: {result.endedNeverRelisted}</li>
+            <li>No watchers for a long time: {result.staleListings}</li>
           </ul>
         </div>
       )}

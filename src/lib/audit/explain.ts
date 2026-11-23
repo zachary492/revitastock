@@ -84,6 +84,24 @@ export function explainFinding(row: FindingRowData): Explanation | null {
     return { heading: "Ended without selling, not relisted", text };
   }
 
+  if (row.type === "stale_listing") {
+    const days = row.details?.listedDays;
+    const lastWatched = formatDay(row.details?.lastWatchedAt);
+    const since = formatDay(row.details?.watchingSince);
+    let text =
+      `${listing} has been live ${typeof days === "number" ? `${days} days` : "a long time"} ` +
+      "with no watchers and no recent sales. ";
+    text += lastWatched
+      ? `The last time RevitaSync saw a watcher on it was ${lastWatched}. `
+      : since
+        ? `RevitaSync hasn't seen a watcher on it since it started checking on ${since}. `
+        : "";
+    text +=
+      "Take a look for a mistake in the title, photos, item details or description, " +
+      "or consider changing the price or relisting. If it's fine as it is, you can dismiss this.";
+    return { heading: "No watchers for a long time", text };
+  }
+
   return null;
 }
 
@@ -91,6 +109,7 @@ export interface FindingSummary {
   total: number;
   soldButStillActive: number;
   endedNeverRelisted: number;
+  staleListings: number;
 }
 
 export function summarizeFindings(rows: { type: string }[]): FindingSummary {
@@ -100,10 +119,12 @@ export function summarizeFindings(rows: { type: string }[]): FindingSummary {
   const endedNeverRelisted = rows.filter(
     (r) => r.type === "ended_never_relisted"
   ).length;
+  const staleListings = rows.filter((r) => r.type === "stale_listing").length;
   return {
-    total: soldButStillActive + endedNeverRelisted,
+    total: soldButStillActive + endedNeverRelisted + staleListings,
     soldButStillActive,
     endedNeverRelisted,
+    staleListings,
   };
 }
 

@@ -1,14 +1,21 @@
 import type { ListingRecord, SellingLists } from "../ebay/sellingLists";
 import { normalizeLabel } from "../listings/organize";
+import type { WatchState } from "../listings/watchState";
 
 /** eBay only lets us see sales from the last 60 days. */
 export const SALES_WINDOW_DAYS = 60;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+/** A live listing with no watchers for this many days is "stale". */
+export const STALE_DAYS = 90;
+
 export interface RuleOptions {
   /** "Today". Only tests need to set this. */
   now?: Date;
+  /** What we remember about watchers. Without it the stale check is skipped. */
+  watchStates?: ReadonlyMap<string, WatchState>;
+  staleDays?: number;
 }
 
 /** A live listing whose label has a PAID sale. Wording: "check this". */
@@ -29,7 +36,19 @@ export interface EndedNeverRelisted {
   earlierEndedCount: number; // older ended listings with the same label
 }
 
-export type Finding = SoldButStillActive | EndedNeverRelisted;
+/** A live listing that has had no watchers (and no sales) for a long time. */
+export interface StaleListing {
+  rule: "stale_listing";
+  label: string | null;
+  listing: ListingRecord;
+  listedDays: number;
+  /** Last time RevitaSync saw a watcher; null = never since it started checking. */
+  lastWatchedAt: string | null;
+  /** When RevitaSync first saw this listing. */
+  watchingSince: string;
+}
+
+export type Finding = SoldButStillActive | EndedNeverRelisted | StaleListing;
 
 function time(value: string | null): number | null {
   if (!value) return null;
@@ -151,7 +170,64 @@ export function findEndedNeverRelisted(
   );
 }
 
-/** Both rules together. */
+/**
+ * Rule 3: "no watchers for a long time".
+ *
+ * eBay only reports the watcher count right now, so we remember it on every
+ * sync. A live listing is flagged when ALL of these hold:
+ *  - it has been live at least 90 days (eBay keeps the original start date),
+ *  - nobody is watching it now,
+ *  - we have not seen a watcher on it in the last 90 days,
+ *  - its label has no sale in the last 90 days (a seller with several in stock
+ *    may sell without watchers).
+ * Works with unlabeled listings too. Skipped entirely if the watcher memory
+ * could not be loaded.
+ */
+export function findStaleListings(
+  lists: SellingLists,
+  options: RuleOptions = {}
+): StaleListing[] {
+  const watchStates = options.watchStates;
+  if (!watchStates) return [];
+
+  const now = (options.now ?? new Date()).getTime();
+  const staleDays = options.staleDays ?? STALE_DAYS;
+  const cutoff = now - staleDays * DAY_MS;
+
+  const recentlySold = new Set<string>();
+  for (const sale of lists.sold) {
+    const label = normalizeLabel(sale.sku);
+    const soldAt = time(sale.soldAt);
+    if (label && soldAt !== null && soldAt >= cutoff) recentlySold.add(label);
+  }
+
+  const found: StaleListing[] = [];
+  for (const listing of lists.active) {
+    const started = time(listing.startTime);
+    if (started === null || started > cutoff) continue;
+    if ((listing.watchCount ?? 0) > 0) continue;
+
+    const state = watchStates.get(listing.itemId);
+    if (!state) continue;
+    const lastWatched = time(state.lastWatchedAt);
+    if (lastWatched !== null && lastWatched > cutoff) continue;
+
+    const label = normalizeLabel(listing.sku);
+    if (label && recentlySold.has(label)) continue;
+
+    found.push({
+      rule: "stale_listing",
+      label,
+      listing,
+      listedDays: Math.floor((now - started) / DAY_MS),
+      lastWatchedAt: state.lastWatchedAt,
+      watchingSince: state.firstSeenAt,
+    });
+  }
+  return found.sort((a, b) => b.listedDays - a.listedDays);
+}
+
+/** All the checks together. */
 export function runListingRules(
   lists: SellingLists,
   options: RuleOptions = {}
@@ -159,5 +235,6 @@ export function runListingRules(
   return [
     ...findSoldButStillActive(lists, options),
     ...findEndedNeverRelisted(lists),
+    ...findStaleListings(lists, options),
   ];
 }

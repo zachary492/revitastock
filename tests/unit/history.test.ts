@@ -122,23 +122,35 @@ describe("mergeHistory", () => {
 });
 
 // A tiny fake of the parts of Supabase we use.
-function fakeSupabase(opts: { stored?: SavedRow[]; upsertError?: string; selectError?: string }) {
+function fakeSupabase(opts: {
+  stored?: SavedRow[];
+  upsertError?: string;
+  selectError?: string;
+  watchError?: string;
+}) {
   const upserts: unknown[][] = [];
   const stored = opts.stored ?? [];
   const client = {
-    from: () => ({
+    from: (table: string) => ({
       upsert: async (rows: unknown[]) => {
         upserts.push(rows);
         return { error: opts.upsertError ? { message: opts.upsertError } : null };
       },
       select: () => {
+        const isWatch = table === "listing_watch_state";
         const chain = {
           eq: () => chain,
           order: () => chain,
-          range: async (from: number, to: number) =>
-            opts.selectError
+          range: async (from: number, to: number) => {
+            if (isWatch) {
+              return opts.watchError
+                ? { data: null, error: { message: opts.watchError } }
+                : { data: [], error: null };
+            }
+            return opts.selectError
               ? { data: null, error: { message: opts.selectError } }
-              : { data: stored.slice(from, to + 1), error: null },
+              : { data: stored.slice(from, to + 1), error: null };
+          },
         };
         return chain;
       },
@@ -177,6 +189,23 @@ describe("history store", () => {
     expect(out.fromHistory).toBe(0);
     expect(out.warning).toContain("boom");
   });
+  it("returns watcher memory for live listings", async () => {
+    const { client } = fakeSupabase({});
+    const live = rec({ itemId: "LIVE", status: "active", watchCount: 2 });
+    const out = await syncListingHistory(client, "u1", { ...empty, active: [live] });
+    expect(out.watchStates?.get("LIVE")?.lastWatchCount).toBe(2);
+    expect(out.watchStates?.get("LIVE")?.lastWatchedAt).not.toBeNull();
+    expect(out.warning).toBeUndefined();
+  });
+
+  it("returns no watcher memory, with a warning, if it can't be read", async () => {
+    const { client } = fakeSupabase({ watchError: "wboom" });
+    const out = await syncListingHistory(client, "u1", { ...empty, endedUnsold: [rec({})] });
+    expect(out.watchStates).toBeUndefined();
+    expect(out.warning).toContain("wboom");
+    expect(out.lists.endedUnsold).toHaveLength(1);
+  });
+
   it("still merges history when saving fails, and warns", async () => {
     const { client } = fakeSupabase({ stored: [savedRow("OLD")], upsertError: "nope" });
     const out = await syncListingHistory(client, "u1", { ...empty, endedUnsold: [rec({ itemId: "NEW" })] });

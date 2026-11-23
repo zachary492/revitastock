@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { EBAY_SCOPES, getEbayApiBase } from "./oauth";
 import { fetchAllSellingLists } from "./sellingFetch";
 import { syncListingHistory } from "../listings/historyStore";
+import type { WatchState } from "../listings/watchState";
 import {
   ReconnectRequiredError,
   isExpired,
@@ -81,6 +82,8 @@ export type SellingFetchData = Awaited<ReturnType<typeof fetchAllSellingLists>> 
   /** Sold/ended items that only our saved history still knows about. */
   fromHistory?: number;
   historyWarning?: string;
+  /** Watcher memory per live item (absent if it couldn't be loaded). */
+  watchStates?: ReadonlyMap<string, WatchState>;
 };
 
 export type SellingListsResult =
@@ -111,6 +114,7 @@ export async function loadSellingListsForUser(
       lists: outcome.lists,
       fromHistory: outcome.fromHistory,
       historyWarning: outcome.warning,
+      watchStates: outcome.watchStates,
     },
   };
 }

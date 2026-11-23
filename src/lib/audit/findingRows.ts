@@ -12,9 +12,13 @@ export interface DiscrepancyRow {
   details: Record<string, unknown>;
 }
 
+/** Stands in for the label on findings about listings that have none. */
+export const NO_LABEL = "(no label)";
+
 export const LISTING_RULE_TYPES: ListingRuleType[] = [
   "sold_but_still_active",
   "ended_never_relisted",
+  "stale_listing",
 ];
 
 export function findingToRow(finding: Finding): DiscrepancyRow {
@@ -31,6 +35,24 @@ export function findingToRow(finding: Finding): DiscrepancyRow {
         saleDates: finding.sales.map((s) => s.soldAt),
         saleItemIds: finding.sales.map((s) => s.itemId),
         listedAfterSale: finding.listedAfterSale,
+      },
+    };
+  }
+
+  if (finding.rule === "stale_listing") {
+    return {
+      sku: finding.label ?? NO_LABEL,
+      type: finding.rule,
+      physical_quantity: null,
+      live_quantity: finding.listing.quantityAvailable,
+      listing_id: finding.listing.itemId,
+      details: {
+        title: finding.listing.title,
+        price: finding.listing.price,
+        startTime: finding.listing.startTime,
+        listedDays: finding.listedDays,
+        lastWatchedAt: finding.lastWatchedAt,
+        watchingSince: finding.watchingSince,
       },
     };
   }
