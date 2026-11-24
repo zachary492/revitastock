@@ -85,27 +85,28 @@ describe("findQualityIssues", () => {
   });
 });
 
-describe("size split across Size and Size Type", () => {
+describe("size split across Size and Jacket/Coat Length", () => {
   const base = { itemId: "1", descriptionLength: 200, pictureCount: 6 };
-  const spec = (size: string, type?: string) => [
+  const spec = (size: string, length?: string, fit?: string) => [
     { name: "Brand", values: ["X"] }, { name: "Color", values: ["Navy"] },
     { name: "Size", values: [size] },
-    ...(type ? [{ name: "Size Type", values: [type] }] : []),
+    ...(length ? [{ name: "Jacket/Coat Length", values: [length] }] : []),
+    ...(fit ? [{ name: "Size Type", values: [fit] }] : []),
   ];
-  it("flags 46R in the title against Size 44 + Regular", () => {
-    const p = qualityProblems({ ...base, title: "Wool Blazer 46R", specifics: spec("44", "Regular") });
+  it("accepts 42L when Size is 42, Length is Long and Size Type is Regular (a fit)", () => {
+    expect(qualityProblems({ ...base, title: "Suit 42L", specifics: spec("42", "Long", "Regular") })).toEqual([]);
+  });
+  it("flags the length when it differs", () => {
+    const p = qualityProblems({ ...base, title: "Suit 42L", specifics: spec("42", "Regular", "Regular") });
+    expect(p.join(" ")).toMatch(/42L.*42R/);
+  });
+  it("flags the chest number when it differs", () => {
+    const p = qualityProblems({ ...base, title: "Suit 46R", specifics: spec("44", "Regular") });
     expect(p.join(" ")).toMatch(/46R.*44R/);
   });
-  it("flags the length when only that differs", () => {
-    const p = qualityProblems({ ...base, title: "Wool Blazer 44L", specifics: spec("44", "Regular") });
-    expect(p.join(" ")).toMatch(/44L.*44R/);
-  });
-  it("flags a bare chest number that differs when no type is given", () => {
-    const p = qualityProblems({ ...base, title: "Wool Blazer 46R", specifics: spec("44") });
+  it("ignores Size Type completely, and compares chest only when no length is given", () => {
+    expect(qualityProblems({ ...base, title: "Suit 42L", specifics: spec("42", undefined, "Regular") })).toEqual([]);
+    const p = qualityProblems({ ...base, title: "Suit 46R", specifics: spec("44", undefined, "Slim") });
     expect(p.join(" ")).toMatch(/46R.*44/);
-  });
-  it("is quiet when they agree", () => {
-    expect(qualityProblems({ ...base, title: "Wool Blazer 44R", specifics: spec("44", "Regular") })).toEqual([]);
-    expect(qualityProblems({ ...base, title: "Wool Blazer 44R", specifics: spec("44") })).toEqual([]);
   });
 });

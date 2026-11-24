@@ -28,7 +28,9 @@ export function qualityProblems(details: ItemDetails): string[] {
     details.specifics
       .filter((s) => /size/i.test(s.name) && !/type/i.test(s.name))
       .flatMap((s) => s.values),
-    details.specifics.filter((s) => /size.*type|^type$/i.test(s.name)).flatMap((s) => s.values)
+    // Length lives in its own field ("Jacket/Coat Length"). "Size Type" is the
+    // fit (Regular, Slim, Classic) and says nothing about length.
+    details.specifics.filter((s) => /length/i.test(s.name) && !/sleeve|inseam/i.test(s.name)).flatMap((s) => s.values)
   );
   const conflict = findSizeConflict(details.title, sizeValues);
   if (conflict) {
