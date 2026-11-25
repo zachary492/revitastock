@@ -21,7 +21,7 @@ const rec = (id: string, o: Partial<ListingRecord> = {}): ListingRecord => ({
 });
 const stored = (id: string, o: Partial<StoredDetails> = {}): StoredDetails => ({
   itemId: id, title: `Title ${id}`, descriptionLength: 100, pictureCount: 5,
-  specifics: [{ name: "Brand", values: ["X"] }], fetchedAt: daysAgo(1), ...o,
+  specifics: [{ name: "Brand", values: ["X"] }], descriptionText: "text", categoryName: "A:B", fetchedAt: daysAgo(1), ...o,
 });
 const map = (...s: StoredDetails[]) => new Map(s.map((x) => [x.itemId, x]));
 
@@ -52,6 +52,10 @@ describe("needingRefresh", () => {
       stored("edited", { title: "Old title" })
     );
     expect(needingRefresh(active, s, NOW).map((r) => r.itemId)).toEqual(["never", "edited", "older", "old"]);
+  });
+  it("re-reads copies saved before description text was kept", () => {
+    const s = map(stored("1", { descriptionText: undefined }), stored("2"));
+    expect(needingRefresh([rec("1"), rec("2")], s, NOW).map((r) => r.itemId)).toEqual(["1"]);
   });
   it("ignores listings that are not live", () => {
     expect(needingRefresh([rec("1", { status: "sold" })], map(), NOW)).toEqual([]);
@@ -84,7 +88,7 @@ function fakeDb(rows: StoredDetails[] = [], opts: { loadError?: string; saveErro
 }
 const okFetch = (id: string): DetailFetchResult => ({
   ok: true,
-  details: { itemId: id, title: `Title ${id}`, descriptionLength: 50, pictureCount: 4, specifics: [] },
+  details: { itemId: id, title: `Title ${id}`, descriptionLength: 50, pictureCount: 4, specifics: [], descriptionText: "hello", categoryName: "A:B" },
 });
 
 describe("refreshListingDetails", () => {

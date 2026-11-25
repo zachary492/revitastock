@@ -36,6 +36,7 @@ export function findingToRow(finding: AnyFinding): DiscrepancyRow {
         title: finding.listing.title,
         price: finding.listing.price,
         problems: finding.problems,
+        category: finding.category ?? null,
       },
     };
   }

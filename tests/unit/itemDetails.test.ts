@@ -122,3 +122,21 @@ describe("outlineXml", () => {
     expect(outlineXml(ITEM, 5).split("\n").length).toBe(6);
   });
 });
+
+describe("category and description text", () => {
+  it("reads the primary category path and keeps the description text", () => {
+    const xml = `<GetItemResponse><Ack>Success</Ack><Item><ItemID>100000000001</ItemID><Title>T</Title>
+      <Description>&lt;div&gt;Pit to pit 22&lt;/div&gt;</Description>
+      <PrimaryCategory><CategoryID>3002</CategoryID><CategoryName>Clothing:Men's Clothing:Suits &amp; Suit Separates</CategoryName></PrimaryCategory>
+      </Item></GetItemResponse>`;
+    const d = parseItemDetails(xml);
+    expect(d?.categoryId).toBe("3002");
+    expect(d?.categoryName).toBe("Clothing:Men's Clothing:Suits & Suit Separates");
+    expect(d?.descriptionText).toBe("Pit to pit 22");
+  });
+  it("copes with no category", () => {
+    const d = parseItemDetails(`<Item><ItemID>100000000001</ItemID><Title>T</Title></Item>`);
+    expect(d?.categoryId).toBeNull();
+    expect(d?.categoryName).toBeNull();
+  });
+});

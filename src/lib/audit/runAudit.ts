@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getValidAccessToken, loadSellingListsForUser } from "@/lib/ebay/connection";
 import { refreshListingDetails } from "@/lib/listings/detailStore";
 import { findQualityIssues, type QualityIssue } from "@/lib/audit/qualityRules";
+import { loadSellerSettings } from "@/lib/audit/settingsStore";
 import { applyLabelLinks, type LabelLink } from "@/lib/listings/labelLinks";
 import { runListingRules } from "@/lib/audit/listingRules";
 import { findingToRow, LISTING_RULE_TYPES } from "@/lib/audit/findingRows";
@@ -97,7 +98,11 @@ export async function runListingAuditForUser(
       accessToken: token.accessToken,
       active: lists.active,
     });
-    qualityIssues = findQualityIssues(lists.active, refreshed.details);
+    const settings = await loadSellerSettings(supabase, userId);
+    qualityIssues = findQualityIssues(lists.active, refreshed.details, {
+      disabledChecks: settings.disabledChecks,
+      requiredPhrases: settings.requiredPhrases,
+    });
     detailsChecked = lists.active.filter((r) => refreshed.details.has(r.itemId)).length;
     if (refreshed.warning) detailsNote = refreshed.warning;
     else if (refreshed.tokenExpired) detailsNote = "eBay asked for a fresh sign-in partway through; the rest will be checked next time.";

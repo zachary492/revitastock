@@ -164,6 +164,13 @@ export default async function SettingsPage({
             </Link>
             <br />
             <Link
+              href="/settings/checks"
+              className="mt-1 inline-block text-sm text-gray-900 underline underline-offset-2"
+            >
+              Listing checks (choose what RevitaSync looks for)
+            </Link>
+            <br />
+            <Link
               href="/settings/item-sample"
               className="mt-1 inline-block text-sm text-gray-500 underline underline-offset-2"
             >

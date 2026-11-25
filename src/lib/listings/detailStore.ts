@@ -27,6 +27,9 @@ interface DetailRow {
   description_length: number;
   picture_count: number;
   specifics: ItemSpecific[];
+  category_id: string | null;
+  category_name: string | null;
+  description_text: string | null;
   fetched_at: string;
 }
 
@@ -38,6 +41,9 @@ export function toDetailRow(userId: string, d: StoredDetails): DetailRow {
     description_length: d.descriptionLength,
     picture_count: d.pictureCount,
     specifics: d.specifics,
+    category_id: d.categoryId ?? null,
+    category_name: d.categoryName ?? null,
+    description_text: d.descriptionText ?? null,
     fetched_at: d.fetchedAt,
   };
 }
@@ -48,6 +54,9 @@ interface SavedDetailRow {
   description_length: number | null;
   picture_count: number | null;
   specifics: unknown;
+  category_id?: string | null;
+  category_name?: string | null;
+  description_text?: string | null;
   fetched_at: string;
 }
 
@@ -73,6 +82,9 @@ export function fromDetailRow(row: SavedDetailRow): StoredDetails {
     descriptionLength: row.description_length ?? 0,
     pictureCount: row.picture_count ?? 0,
     specifics: readSpecifics(row.specifics),
+    categoryId: row.category_id ?? undefined,
+    categoryName: row.category_name ?? undefined,
+    descriptionText: row.description_text ?? undefined,
     fetchedAt: row.fetched_at,
   };
 }
@@ -85,7 +97,9 @@ export async function loadDetails(
   for (let from = 0; ; from += PAGE) {
     const { data, error } = await supabase
       .from("listing_details")
-      .select("item_id, title, description_length, picture_count, specifics, fetched_at")
+      .select(
+        "item_id, title, description_length, picture_count, specifics, category_id, category_name, description_text, fetched_at"
+      )
       .eq("user_id", userId)
       .order("item_id")
       .range(from, from + PAGE - 1);
@@ -125,6 +139,7 @@ export function needingRefresh(
     const s = stored.get(r.itemId);
     if (!s) return 0; // never read
     if (s.title !== r.title) return 1; // the title was edited
+    if (s.descriptionText == null) return 1; // saved before we kept the text
     const age = now.getTime() - Date.parse(s.fetchedAt);
     return age >= maxAge ? 2 : null; // stale copy
   };

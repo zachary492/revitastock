@@ -13,14 +13,21 @@ export interface ItemSpecific {
   values: string[]; // empty = the name is there but nothing is filled in
 }
 
-/** What we keep about one listing's content (not the description itself). */
+/** What we keep about one listing's content. */
 export interface ItemDetails {
   itemId: string;
   title: string;
   descriptionLength: number; // visible characters, HTML removed
   pictureCount: number;
   specifics: ItemSpecific[];
+  /** eBay category, e.g. "Clothing, Shoes & Accessories:Men's Clothing:Suits". */
+  categoryId?: string | null;
+  categoryName?: string | null;
+  /** Visible description text (HTML removed, capped). Absent on older saved copies. */
+  descriptionText?: string | null;
 }
+
+export const MAX_DESCRIPTION_TEXT = 8000;
 
 const ITEM_ID = /^\d{6,20}$/;
 
@@ -70,7 +77,9 @@ export function parseItemDetails(xml: string): ItemDetails | null {
   const decodedDescription = rawDescription
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">");
-  const descriptionLength = stripHtml(decodedDescription).length;
+  const descriptionPlain = stripHtml(decodedDescription);
+  const descriptionLength = descriptionPlain.length;
+  const categoryBlock = section(item, "PrimaryCategory") ?? "";
 
   const pictureBlock = section(item, "PictureDetails") ?? "";
   const pictureUrls = new Set(
@@ -95,6 +104,9 @@ export function parseItemDetails(xml: string): ItemDetails | null {
     descriptionLength,
     pictureCount,
     specifics,
+    categoryId: text(categoryBlock, "CategoryID") ?? null,
+    categoryName: (text(categoryBlock, "CategoryName") ?? "").replace(/&amp;/g, "&").trim() || null,
+    descriptionText: descriptionPlain.slice(0, MAX_DESCRIPTION_TEXT),
   };
 }
 
