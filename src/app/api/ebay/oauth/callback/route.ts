@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { exchangeCodeForTokens } from "@/lib/ebay/oauth";
+import { ensureEbayIdentity } from "@/lib/ebay/identity";
 
 export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get("code");
@@ -35,6 +36,10 @@ export async function GET(request: NextRequest) {
     });
 
     if (error) throw new Error(error.message);
+
+    // Remember which eBay account this is (needed to honor eBay's account
+    // deletion notices). Best effort: connecting works even if this fails.
+    await ensureEbayIdentity(supabase, user.id, tokens.access_token);
 
     return NextResponse.redirect(
       new URL("/settings?ebay=connected", request.url)

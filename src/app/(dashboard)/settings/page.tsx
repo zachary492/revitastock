@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getEbayAuthorizeUrl } from "@/lib/ebay/oauth";
 import { loadSellingListsForUser } from "@/lib/ebay/connection";
 import { refreshTokenNow } from "./actions";
+import { deleteMyAccount } from "./account-actions";
 
 function formatTime(value: string | null): string | null {
   if (!value) return null;
@@ -26,6 +27,7 @@ export default async function SettingsPage({
     ebay_error?: string;
     refreshed?: string;
     refresh_error?: string;
+    delete_error?: string;
   }>;
 }) {
   const params = await searchParams;
@@ -44,7 +46,7 @@ export default async function SettingsPage({
 
   const { data: connection } = await supabase
     .from("ebay_connections")
-    .select("connected_at, token_expires_at, last_sync_at, last_sync_status, last_sync_message")
+    .select("connected_at, token_expires_at, last_sync_at, last_sync_status, last_sync_message, ebay_username")
     .eq("user_id", user.id)
     .maybeSingle();
 
@@ -122,6 +124,7 @@ export default async function SettingsPage({
             <p className="text-sm text-green-700">
               ✓ Connected since{" "}
               {formatTime(connection.connected_at) ?? "earlier"}
+              {connection.ebay_username ? ` as ${connection.ebay_username}` : ""}
             </p>
             <p className="mt-1 text-xs text-gray-500">
               The access token renews automatically
@@ -149,33 +152,6 @@ export default async function SettingsPage({
             {sellingError && (
               <p className="mt-2 text-sm text-red-600">{sellingError}</p>
             )}
-            <Link
-              href="/listings"
-              className="mt-3 inline-block text-sm text-gray-700 underline underline-offset-2"
-            >
-              View your listings →
-            </Link>
-            <br />
-            <Link
-              href="/settings/label-test"
-              className="mt-1 inline-block text-sm text-gray-500 underline underline-offset-2"
-            >
-              Label write test (advanced)
-            </Link>
-            <br />
-            <Link
-              href="/settings/checks"
-              className="mt-1 inline-block text-sm text-gray-900 underline underline-offset-2"
-            >
-              Listing checks (choose what RevitaSync looks for)
-            </Link>
-            <br />
-            <Link
-              href="/settings/item-sample"
-              className="mt-1 inline-block text-sm text-gray-500 underline underline-offset-2"
-            >
-              Look at a listing&apos;s data (advanced)
-            </Link>
             <div className="mt-4 flex flex-wrap items-center gap-4">
               <form action={refreshTokenNow}>
                 <button
@@ -205,6 +181,82 @@ export default async function SettingsPage({
           </>
         )}
       </div>
+
+      {connection && (
+        <div className="mt-6 rounded-md border border-gray-200 p-5">
+          <h2 className="mb-3 text-sm font-medium uppercase tracking-wide text-gray-500">
+            Your checks
+          </h2>
+          <Link
+            href="/settings/checks"
+            className="block rounded-md bg-gray-900 px-4 py-3 text-sm font-medium text-white hover:bg-gray-800"
+          >
+            Listing checks
+            <span className="mt-0.5 block text-xs font-normal text-gray-300">
+              Choose what RevitaSync looks for, and words every description should contain
+            </span>
+          </Link>
+          <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-sm">
+            <Link href="/discrepancies" className="text-gray-700 underline underline-offset-2">
+              Needs attention
+            </Link>
+            <Link href="/listings" className="text-gray-700 underline underline-offset-2">
+              Your listings
+            </Link>
+          </div>
+          <details className="mt-4">
+            <summary className="cursor-pointer text-xs text-gray-500">Advanced tools</summary>
+            <div className="mt-2 space-y-1 text-sm">
+              <Link href="/settings/label-test" className="block text-gray-500 underline underline-offset-2">
+                Label write test
+              </Link>
+              <Link href="/settings/item-sample" className="block text-gray-500 underline underline-offset-2">
+                Look at a listing&apos;s data
+              </Link>
+            </div>
+          </details>
+        </div>
+      )}
+
+      <div className="mt-6 rounded-md border border-red-200 p-5">
+        <h2 className="mb-2 text-sm font-medium uppercase tracking-wide text-red-700">
+          Delete my account and data
+        </h2>
+        <p className="mb-3 text-xs text-gray-600">
+          This permanently deletes your RevitaSync account, your eBay connection and everything
+          stored about you. It can&apos;t be undone and doesn&apos;t change anything on eBay. To
+          also remove RevitaSync&apos;s access on eBay, use your eBay account&apos;s settings for
+          connected apps.
+        </p>
+        {params.delete_error && (
+          <p className="mb-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+            {params.delete_error === "confirm"
+              ? "Type DELETE (in capital letters) to confirm."
+              : "Couldn't delete the account right now. Please try again."}
+          </p>
+        )}
+        <form action={deleteMyAccount} className="flex flex-wrap items-center gap-3">
+          <input
+            name="confirm"
+            required
+            autoComplete="off"
+            placeholder="Type DELETE"
+            className="rounded-md border border-gray-300 px-3 py-1.5 text-sm"
+          />
+          <button
+            type="submit"
+            className="rounded-md border border-red-300 px-3 py-1.5 text-sm text-red-700 hover:bg-red-50"
+          >
+            Delete everything
+          </button>
+        </form>
+      </div>
+
+      <p className="mt-8 text-xs text-gray-500">
+        <Link href="/privacy" className="underline underline-offset-2">
+          Privacy policy
+        </Link>
+      </p>
     </main>
   );
 }

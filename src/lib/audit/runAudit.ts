@@ -3,6 +3,7 @@ import { getValidAccessToken, loadSellingListsForUser } from "@/lib/ebay/connect
 import { refreshListingDetails } from "@/lib/listings/detailStore";
 import { findQualityIssues, type QualityIssue } from "@/lib/audit/qualityRules";
 import { loadSellerSettings } from "@/lib/audit/settingsStore";
+import { ensureEbayIdentity } from "@/lib/ebay/identity";
 import { applyLabelLinks, type LabelLink } from "@/lib/listings/labelLinks";
 import { runListingRules } from "@/lib/audit/listingRules";
 import { findingToRow, LISTING_RULE_TYPES } from "@/lib/audit/findingRows";
@@ -92,6 +93,7 @@ export async function runListingAuditForUser(
   let detailsNote: string | undefined;
   const token = await getValidAccessToken(supabase, userId);
   if (token.ok) {
+    await ensureEbayIdentity(supabase, userId, token.accessToken);
     const refreshed = await refreshListingDetails({
       supabase,
       userId,

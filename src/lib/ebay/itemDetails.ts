@@ -2,7 +2,7 @@ import { section, sections, text } from "./xml";
 import { parseTradingResult } from "./labelWrite";
 import { isExpiredTokenMessage } from "./tokenRefresh";
 
-function tradingUrl(): string {
+export function tradingUrl(): string {
   return process.env.EBAY_ENV?.trim().toLowerCase() === "production"
     ? "https://api.ebay.com/ws/api.dll"
     : "https://api.sandbox.ebay.com/ws/api.dll";
