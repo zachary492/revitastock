@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { generateKeyPairSync, createSign } from "crypto";
 import {
-  makePublicKeyFetcher, parseDeletionNotice, parseSignatureHeader, toPem, verifyEbayNotification,
+  makePublicKeyFetcher, parseDeletionNotice, parseSignatureHeader, toPem, verifyEbayNotification, checkEbayNotification,
 } from "../../src/lib/ebay/notificationVerify";
 
 const { publicKey, privateKey } = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
@@ -68,10 +68,29 @@ describe("public key fetcher", () => {
     expect(await get("../../etc/passwd")).toBeNull();
     expect(calls).toBe(1);
   });
-  it("returns null when eBay refuses", async () => {
+  it("throws (with the status) when eBay refuses", async () => {
     const fetchImpl = (async () => new Response("no", { status: 404 })) as typeof fetch;
     const get = makePublicKeyFetcher("https://api.ebay.com", async () => "t", fetchImpl);
-    expect(await get("missing-kid-1234")).toBeNull();
+    await expect(get("missing-kid-1234")).rejects.toThrow("404");
+  });
+});
+
+describe("checkEbayNotification reasons", () => {
+  it("is ok for a good signature", async () => {
+    expect(await checkEbayNotification({ rawBody: body, signatureHeader: goodHeader, getPublicKey: keyFor })).toEqual({ ok: true });
+  });
+  it("says no-header when the header is missing", async () => {
+    expect(await checkEbayNotification({ rawBody: body, signatureHeader: null, getPublicKey: keyFor })).toMatchObject({ ok: false, reason: "no-header" });
+  });
+  it("says bad-header when the header is not readable", async () => {
+    expect(await checkEbayNotification({ rawBody: body, signatureHeader: "not-base64-json", getPublicKey: keyFor })).toMatchObject({ ok: false, reason: "bad-header" });
+  });
+  it("says key-unavailable when the key cannot be fetched", async () => {
+    const failing = async () => { throw new Error("eBay public key request failed (401)."); };
+    expect(await checkEbayNotification({ rawBody: body, signatureHeader: goodHeader, getPublicKey: failing })).toMatchObject({ ok: false, reason: "key-unavailable", detail: expect.stringContaining("401") });
+  });
+  it("says signature-mismatch when the body was changed", async () => {
+    expect(await checkEbayNotification({ rawBody: body + " ", signatureHeader: goodHeader, getPublicKey: keyFor })).toMatchObject({ ok: false, reason: "signature-mismatch" });
   });
 });
 

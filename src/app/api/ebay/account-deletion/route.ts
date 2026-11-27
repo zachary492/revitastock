@@ -5,7 +5,7 @@ import {
   getApplicationToken,
   makePublicKeyFetcher,
   parseDeletionNotice,
-  verifyEbayNotification,
+  checkEbayNotification,
 } from "@/lib/ebay/notificationVerify";
 import { deleteUsers, findUsersForNotice } from "@/lib/ebay/deleteSeller";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -38,15 +38,19 @@ export async function POST(request: NextRequest) {
   }
 
   const apiBase = getEbayApiBase();
-  const valid = await verifyEbayNotification({
+  const check = await checkEbayNotification({
     rawBody,
     signatureHeader: request.headers.get("x-ebay-signature"),
     getPublicKey: makePublicKeyFetcher(apiBase, () =>
       getApplicationToken(apiBase, clientId, clientSecret)
     ),
   });
-  if (!valid) {
-    console.warn("Account deletion: signature check failed; notice ignored.");
+  if (!check.ok) {
+    // The reason separates a stranger's request (no-header) from a real eBay
+    // notice we could not verify. No notice content or keys are logged.
+    console.warn(
+      `Account deletion: signature check failed (${check.reason}${check.detail ? `: ${check.detail}` : ""}); notice ignored.`
+    );
     return new NextResponse(null, { status: 412 });
   }
 

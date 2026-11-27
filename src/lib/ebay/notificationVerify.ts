@@ -39,6 +39,47 @@ export interface PublicKeyInfo {
   digest?: string;
 }
 
+export type VerifyResult =
+  | { ok: true }
+  | { ok: false; reason: "no-header" | "bad-header" | "key-unavailable" | "bad-digest" | "signature-mismatch"; detail?: string };
+
+/**
+ * Same check as verifyEbayNotification, but says WHY it failed so the server
+ * log can tell a stranger's request (no header) from a real eBay notice that
+ * we could not verify (key not fetched, or signature mismatch).
+ */
+export async function checkEbayNotification(options: {
+  rawBody: string;
+  signatureHeader: string | null | undefined;
+  getPublicKey: (keyId: string) => Promise<PublicKeyInfo | null>;
+}): Promise<VerifyResult> {
+  if (!options.signatureHeader) return { ok: false, reason: "no-header" };
+  const header = parseSignatureHeader(options.signatureHeader);
+  if (!header) return { ok: false, reason: "bad-header" };
+  let info: PublicKeyInfo | null;
+  try {
+    info = await options.getPublicKey(header.kid);
+  } catch (err) {
+    return { ok: false, reason: "key-unavailable", detail: err instanceof Error ? err.message : String(err) };
+  }
+  if (!info?.key) return { ok: false, reason: "key-unavailable", detail: "no key returned" };
+
+  const digest = (info.digest ?? header.digest ?? "sha1").toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (!["sha1", "sha256", "sha384", "sha512"].includes(digest)) {
+    return { ok: false, reason: "bad-digest", detail: digest.slice(0, 20) };
+  }
+  try {
+    const verifier = createVerify(digest);
+    verifier.update(options.rawBody);
+    verifier.end();
+    return verifier.verify(toPem(info.key), header.signature, "base64")
+      ? { ok: true }
+      : { ok: false, reason: "signature-mismatch", detail: `digest ${digest}, alg ${header.alg ?? "?"}` };
+  } catch (err) {
+    return { ok: false, reason: "signature-mismatch", detail: err instanceof Error ? err.message : String(err) };
+  }
+}
+
 /**
  * True only when the signature in the header is valid for exactly these raw
  * body bytes, using the public key eBay publishes for that key id.
@@ -48,26 +89,7 @@ export async function verifyEbayNotification(options: {
   signatureHeader: string | null | undefined;
   getPublicKey: (keyId: string) => Promise<PublicKeyInfo | null>;
 }): Promise<boolean> {
-  const header = parseSignatureHeader(options.signatureHeader);
-  if (!header) return false;
-  let info: PublicKeyInfo | null;
-  try {
-    info = await options.getPublicKey(header.kid);
-  } catch {
-    return false;
-  }
-  if (!info?.key) return false;
-
-  const digest = (info.digest ?? header.digest ?? "sha1").toLowerCase().replace(/[^a-z0-9]/g, "");
-  if (!["sha1", "sha256", "sha384", "sha512"].includes(digest)) return false;
-  try {
-    const verifier = createVerify(digest);
-    verifier.update(options.rawBody);
-    verifier.end();
-    return verifier.verify(toPem(info.key), header.signature, "base64");
-  } catch {
-    return false;
-  }
+  return (await checkEbayNotification(options)).ok;
 }
 
 const keyCache = new Map<string, { info: PublicKeyInfo; at: number }>();
@@ -88,7 +110,7 @@ export function makePublicKeyFetcher(
     const res = await fetchImpl(`${apiBase}/commerce/notification/v1/public_key/${keyId}`, {
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     });
-    if (!res.ok) return null;
+    if (!res.ok) throw new Error(`eBay public key request failed (${res.status}).`);
     const body = (await res.json()) as { key?: unknown; digest?: unknown };
     if (typeof body.key !== "string") return null;
     const info: PublicKeyInfo = {
