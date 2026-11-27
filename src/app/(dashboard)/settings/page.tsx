@@ -85,8 +85,8 @@ export default async function SettingsPage({
       </Link>
       <h1 className="mb-1 text-2xl font-semibold tracking-tight">Settings</h1>
       <p className="mb-8 text-sm text-gray-600">
-        Connect your eBay account to compare live listings against your
-        inventory.
+        Connect your eBay account so RevitaSync can check your listings for
+        problems.
       </p>
 
       {params.ebay === "connected" && (

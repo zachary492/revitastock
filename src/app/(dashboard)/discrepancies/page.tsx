@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import RunAuditButton from "@/components/discrepancies/RunAuditButton";
-import RunListingAuditButton from "@/components/discrepancies/RunListingAuditButton";
+import FindingFilter, { type FilterOption } from "@/components/discrepancies/FindingFilter";
 import {
   explainFinding,
   formatDay,
@@ -48,7 +48,23 @@ function SummaryCard({
 // The audit also reads listing details from eBay, so allow it a little longer.
 export const maxDuration = 60;
 
-export default async function DiscrepanciesPage() {
+const FILTER_TYPES: { value: string; label: string }[] = [
+  { value: "sold_but_still_active", label: "Sold, but still live" },
+  { value: "ended_never_relisted", label: "Ended, not relisted" },
+  { value: "stale_listing", label: "No watchers" },
+  { value: "listing_quality", label: "Listing quality" },
+];
+
+export default async function DiscrepanciesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ type?: string }>;
+}) {
+  const { type: requestedType } = await searchParams;
+  const typeFilter = FILTER_TYPES.some((t) => t.value === requestedType)
+    ? (requestedType as string)
+    : "all";
+
   const supabase = await createClient();
 
   const {
@@ -58,6 +74,13 @@ export default async function DiscrepanciesPage() {
   if (!user) {
     redirect("/auth");
   }
+
+  const { data: connection } = await supabase
+    .from("ebay_connections")
+    .select("user_id")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  const connected = Boolean(connection);
 
   const { data: allRows } = await supabase
     .from("discrepancies")
@@ -72,6 +95,14 @@ export default async function DiscrepanciesPage() {
   const sample = rows.filter((r) => !r.resolved && !isListingRuleType(r.type));
 
   const summary = summarizeFindings(open);
+  const filterOptions: FilterOption[] = [
+    { value: "all", label: "All problems", count: open.length },
+    ...FILTER_TYPES.map((t) => ({
+      ...t,
+      count: open.filter((r) => r.type === t.value).length,
+    })),
+  ];
+  const visible = typeFilter === "all" ? open : open.filter((r) => r.type === typeFilter);
   const lastChecked = open[0]?.found_at ?? null;
 
   return (
@@ -93,9 +124,31 @@ export default async function DiscrepanciesPage() {
         for the best results.
       </p>
 
-      <RunListingAuditButton />
+      {connected ? (
+        <p className="text-sm text-gray-600">
+          To check your listings again,{" "}
+          <Link href="/dashboard" className="text-gray-900 underline underline-offset-2">
+            run a new check from the dashboard
+          </Link>
+          .
+        </p>
+      ) : (
+        <div className="rounded-md border border-amber-300 bg-amber-50 px-4 py-4">
+          <p className="text-sm font-medium text-gray-900">Connect your eBay account first</p>
+          <p className="mt-1 text-sm text-gray-600">
+            RevitaSync needs permission to read your listings before it can check them. It only
+            reads, and you can delete everything any time.
+          </p>
+          <Link
+            href="/settings"
+            className="mt-3 inline-block rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800"
+          >
+            Connect eBay
+          </Link>
+        </div>
+      )}
 
-      <div className="mb-10 mt-8 grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
+      <div className={`mb-10 mt-8 grid gap-3 sm:grid-cols-3 lg:grid-cols-5 ${connected ? "" : "opacity-50"}`}>
         <SummaryCard
           label="Needs attention"
           value={summary.total}
@@ -128,13 +181,16 @@ export default async function DiscrepanciesPage() {
         />
       </div>
 
-      <h2 className="mb-4 text-lg font-semibold tracking-tight">
-        Items to check
-      </h2>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-lg font-semibold tracking-tight">Items to check</h2>
+        {open.length > 0 && <FindingFilter options={filterOptions} current={typeFilter} />}
+      </div>
 
       {open.length === 0 ? (
         <p className="text-sm text-gray-500">
-          No open problems. Click “Run audit on my eBay listings” to check again.
+          {connected
+            ? "No open problems. Run a new check from the dashboard to look again."
+            : "Nothing to show yet. Results appear here after you connect eBay and run your first audit."}
         </p>
       ) : (
         <>
@@ -143,8 +199,11 @@ export default async function DiscrepanciesPage() {
               Last checked {formatDay(lastChecked)}
             </p>
           )}
+          {visible.length === 0 && (
+            <p className="text-sm text-gray-500">No items of this type right now.</p>
+          )}
           <ul className="space-y-3">
-            {open.map((row) => {
+            {visible.map((row) => {
               const explanation = explainFinding(row);
               return (
                 <li key={row.id} className="rounded-md border border-gray-200 p-4">

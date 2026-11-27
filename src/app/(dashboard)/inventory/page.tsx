@@ -32,8 +32,10 @@ export default async function InventoryPage() {
         Upload inventory
       </h1>
       <p className="mb-8 text-sm text-gray-600">
-        Upload a CSV of what&apos;s actually on your shelf. We&apos;ll check
-        it against your live eBay listings once it&apos;s connected.
+        Optional. Most of RevitaSync&apos;s checks need only your eBay
+        connection. If you also keep a spreadsheet of what&apos;s actually on
+        your shelf, upload it as a CSV and we&apos;ll check it against your
+        live eBay listings.
       </p>
       <CsvUploadForm />
 
