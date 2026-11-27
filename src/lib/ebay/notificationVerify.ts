@@ -25,11 +25,19 @@ export function parseSignatureHeader(header: string | null | undefined): Signatu
   }
 }
 
-/** eBay returns the key without the PEM wrapper lines. Add them if missing. */
+/**
+ * Turns whatever eBay sends for the public key into a clean PEM block.
+ * eBay's key can arrive bare, wrapped on one line, wrapped with real line
+ * breaks, or with the two characters "\\n" where line breaks should be.
+ * OpenSSL only accepts a proper block (header line, 64-character lines,
+ * footer line), so we strip everything and rebuild it.
+ */
 export function toPem(key: string): string {
-  const trimmed = key.trim();
-  if (trimmed.includes("BEGIN PUBLIC KEY")) return trimmed;
-  const body = trimmed.replace(/\s+/g, "");
+  const body = key
+    .replace(/-----BEGIN [A-Z ]+-----/g, "")
+    .replace(/-----END [A-Z ]+-----/g, "")
+    .replace(/\\r|\\n/g, "")
+    .replace(/\s+/g, "");
   const lines = body.match(/.{1,64}/g) ?? [];
   return `-----BEGIN PUBLIC KEY-----\n${lines.join("\n")}\n-----END PUBLIC KEY-----`;
 }

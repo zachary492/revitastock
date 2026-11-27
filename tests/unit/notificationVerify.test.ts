@@ -75,6 +75,22 @@ describe("public key fetcher", () => {
   });
 });
 
+describe("public key shapes eBay may send", () => {
+  const shapes: Record<string, string> = {
+    bare: bare,
+    "wrapped, real line breaks": pem,
+    "wrapped on one line": `-----BEGIN PUBLIC KEY-----${bare}-----END PUBLIC KEY-----`,
+    "wrapped with literal backslash-n": pem.trim().split("\n").join("\\n"),
+    "wrapped, windows line breaks": pem.trim().split("\n").join("\r\n"),
+  };
+  for (const [name, key] of Object.entries(shapes)) {
+    it(`verifies with a key sent as: ${name}`, async () => {
+      const getKey = async () => ({ key, digest: "SHA1" });
+      expect(await checkEbayNotification({ rawBody: body, signatureHeader: goodHeader, getPublicKey: getKey })).toEqual({ ok: true });
+    });
+  }
+});
+
 describe("checkEbayNotification reasons", () => {
   it("is ok for a good signature", async () => {
     expect(await checkEbayNotification({ rawBody: body, signatureHeader: goodHeader, getPublicKey: keyFor })).toEqual({ ok: true });
